@@ -2,12 +2,14 @@ package kiva
 
 import "time"
 
-type KvWriteOptions struct {
+type WriteOptions struct {
 	TTL time.Duration
 }
 
-type KvProvider interface {
-	Set(key string, value interface{}, opts KvWriteOptions) error
+type Provider interface {
+	Connect() error
+	Close()
+	Set(key string, value interface{}, opts WriteOptions) error
 	Get(key string, dest interface{}) error
 	GetByPrefix(prefix string, dest interface{}) error
 	GetRange(keyFrom, keyTo string, dest interface{}) error

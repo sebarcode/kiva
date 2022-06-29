@@ -7,3 +7,4 @@ func New() (*RedisProvider, error) {
 	p := new(RedisProvider)
 	return p, nil
 }
+
