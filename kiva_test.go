@@ -72,7 +72,7 @@ func TestSlice(t *testing.T) {
 
 		for i := 0; i < 1000; i++ {
 			sources[i] = allTypes{
-				ID:      fmt.Sprintf("Data_%d", i),
+				ID:      fmt.Sprintf("Data_%04d", i),
 				Name:    fmt.Sprintf("Data_%d's Name", i),
 				Age:     codekit.RandInt(30) + 15,
 				Created: time.Now(),
@@ -95,6 +95,36 @@ func TestSlice(t *testing.T) {
 				//random check of 3 elements
 				for i := 0; i < 3; i++ {
 					index := codekit.RandInt(999)
+					output := resDatas[index]
+					var source allTypes
+				getSource:
+					for y := 0; y < 1000; y++ {
+						if sources[y].ID == output.ID {
+							source = sources[y]
+							break getSource
+						}
+					}
+
+					convey.So(output.Name, convey.ShouldEqual, source.Name)
+					convey.So(output.Age, convey.ShouldEqual, source.Age)
+					convey.So(output.Salary, convey.ShouldEqual, source.Salary)
+					convey.So(output.Created.UnixMilli(), convey.ShouldAlmostEqual, source.Created.UnixMilli())
+				}
+			})
+		})
+
+		convey.Convey("get data by range", func() {
+			from := "Data_0200"
+			to := "Data_0299"
+			resDatas := []allTypes{}
+			e := k.GetRange(from, to, &resDatas)
+			convey.So(e, convey.ShouldBeNil)
+			convey.So(len(resDatas), convey.ShouldEqual, 100)
+
+			convey.Convey("validate", func() {
+				//random check of 3 elements
+				for i := 0; i < 3; i++ {
+					index := codekit.RandInt(len(resDatas))
 					output := resDatas[index]
 					var source allTypes
 				getSource:

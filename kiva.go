@@ -70,8 +70,8 @@ func (k *Kiva) GetByPattern(pattern string, dest interface{}) error {
 	return nil
 }
 
-func (k *Kiva) GetRange(pattern string, dest interface{}) error {
-	if e := k.provider.GetByPattern(pattern, dest); e != nil {
+func (k *Kiva) GetRange(from, to string, dest interface{}) error {
+	if e := k.provider.GetRange(from, to, dest); e != nil {
 		return fmt.Errorf("kv get error. %s", e.Error())
 	}
 	return nil

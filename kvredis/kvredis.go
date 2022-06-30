@@ -118,7 +118,15 @@ func (p *RedisProvider) GetByPattern(pattern string, dest interface{}) error {
 		return err
 	}
 
-	// get base element of output. output should be ptr of slice
+	return p.getByKeys(dest, keys...)
+}
+
+func (p *RedisProvider) GetRange(keyFrom string, keyTo string, dest interface{}) error {
+	keys := p.getKeysInRange(keyFrom, keyTo)
+	return p.getByKeys(dest, keys...)
+}
+
+func (p *RedisProvider) getByKeys(dest interface{}, keys ...string) error {
 	rtSlice := reflect.TypeOf(dest).Elem()
 	rtElem := rtSlice.Elem()
 
@@ -134,18 +142,40 @@ func (p *RedisProvider) GetByPattern(pattern string, dest interface{}) error {
 	return nil
 }
 
-func (p *RedisProvider) GetRange(keyFrom string, keyTo string, dest interface{}) error {
-	panic("not implemented") // TODO: Implement
-}
-
 func (p *RedisProvider) Delete(key string) {
-	panic("not implemented") // TODO: Implement
+	p.rdb.Del(p.ctx, key).Result()
 }
 
-func (p *RedisProvider) DeleteByPattern(prefi string) {
-	panic("not implemented") // TODO: Implement
+func (p *RedisProvider) DeleteByPattern(pattern string) {
+	keys, err := p.rdb.Keys(p.ctx, pattern).Result()
+	if err != nil {
+		return
+	}
+	p.rdb.Del(p.ctx, keys...)
 }
 
 func (p *RedisProvider) DeleteRange(keyFrom string, keyTo string) {
-	panic("not implemented") // TODO: Implement
+	keys := p.getKeysInRange(keyFrom, keyTo)
+	p.rdb.Del(p.ctx, keys...)
+}
+
+func (p *RedisProvider) getKeysInRange(from, to string) []string {
+	pattern := ""
+	for idx, c := range from {
+		ct := to[idx]
+		if byte(c) != ct {
+			break
+		}
+		pattern += string(c)
+	}
+	pattern += "*"
+	keys, _ := p.rdb.Keys(p.ctx, pattern).Result()
+
+	inRangeKeys := []string{}
+	for _, key := range keys {
+		if strings.Compare(key, from) >= 0 && strings.Compare(key, to) <= 0 {
+			inRangeKeys = append(inRangeKeys, key)
+		}
+	}
+	return inRangeKeys
 }
