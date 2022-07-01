@@ -14,7 +14,6 @@ import (
 	"github.com/eaciit/toolkit"
 	"github.com/sebarcode/codekit"
 	"github.com/sebarcode/kiva"
-	"github.com/sebarcode/kiva/kvredis"
 	"github.com/smartystreets/goconvey/convey"
 )
 
@@ -228,13 +227,16 @@ func TestSyncDB(t *testing.T) {
 }
 
 func prepareKiva() (*kiva.Kiva, error) {
-	provider, err := kvredis.New("", logger, nil)
-	if err != nil {
-		return nil, err
-	}
+	/*
+		provider, err := kvredis.New("", logger, nil)
+		if err != nil {
+			return nil, err
+		}
+	*/
+	provider := kiva.NewSimpleProvider(&kiva.WriteOptions{TTL: 30 * time.Minute})
 	kv, err := kiva.New(
 		provider,
-		kiva.GetterFunc(func(key1, key2 string, kind kiva.GetKind, res interface{}) error {
+		func(key1, key2 string, kind kiva.GetKind, res interface{}) error {
 			var f *dbflex.Filter
 			switch kind {
 			case kiva.GetByID:
@@ -256,7 +258,7 @@ func prepareKiva() (*kiva.Kiva, error) {
 			}
 			*(res.(*int)) = ms[0].GetInt("Value")
 			return nil
-		}),
+		},
 		func(key1 string, value interface{}, op kiva.CommitKind) error {
 			isStruct := reflect.Indirect(reflect.ValueOf(value)).Kind() == reflect.Struct
 			w := dbflex.Eq("_id", key1)

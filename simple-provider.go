@@ -1,8 +1,12 @@
 package kiva
 
 import (
+	"io"
+	"reflect"
 	"strings"
 	"time"
+
+	"github.com/sebarcode/codekit"
 )
 
 type simpleProvideItem struct {
@@ -28,10 +32,12 @@ func (p *SimpleProvider) Connect() error {
 }
 
 func (p *SimpleProvider) Close() {
-	return
 }
 
 func (p *SimpleProvider) Set(key string, value interface{}, opts *WriteOptions) error {
+	if codekit.IsPointer(value) {
+		value = reflect.Indirect(reflect.ValueOf(value)).Interface()
+	}
 	item := simpleProvideItem{
 		Data: value,
 	}
@@ -66,22 +72,42 @@ func (p *SimpleProvider) Set(key string, value interface{}, opts *WriteOptions) 
 			newKeys = append(newKeys, p.keys[cutOffIndex:]...)
 		}
 		p.keys = newKeys
+	} else {
+		p.keys = append(p.keys, key)
 	}
 	return nil
 }
 
 func (p *SimpleProvider) Get(key string, dest interface{}) error {
-	panic("not implemented") // TODO: Implement
+	v, ok := p.data[key]
+	if ok {
+		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(v.Data))
+		return nil
+	}
+	return io.EOF
 }
 
 func (p *SimpleProvider) Delete(key string) {
-	panic("not implemented") // TODO: Implement
+	delete(p.data, key)
+	keys := []string{}
+	for _, k := range p.keys {
+		if k != key {
+			keys = append(keys, k)
+		}
+	}
+	p.keys = keys
 }
 
 func (p *SimpleProvider) Keys(pattern string) []string {
-	panic("not implemented") // TODO: Implement
+	return p.keys
 }
 
 func (p *SimpleProvider) KeyRanges(from string, to string) []string {
-	panic("not implemented") // TODO: Implement
+	inRangeKeys := []string{}
+	for _, key := range p.keys {
+		if strings.Compare(key, from) >= 0 && strings.Compare(key, to) <= 0 {
+			inRangeKeys = append(inRangeKeys, key)
+		}
+	}
+	return inRangeKeys
 }
