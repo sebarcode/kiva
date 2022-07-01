@@ -112,20 +112,6 @@ func (p *RedisProvider) Get(key string, dest interface{}) error {
 	return nil
 }
 
-func (p *RedisProvider) GetByPattern(pattern string, dest interface{}) error {
-	keys, err := p.rdb.Keys(p.ctx, pattern).Result()
-	if err != nil {
-		return err
-	}
-
-	return p.getByKeys(dest, keys...)
-}
-
-func (p *RedisProvider) GetRange(keyFrom string, keyTo string, dest interface{}) error {
-	keys := p.getKeysInRange(keyFrom, keyTo)
-	return p.getByKeys(dest, keys...)
-}
-
 func (p *RedisProvider) getByKeys(dest interface{}, keys ...string) error {
 	rtSlice := reflect.TypeOf(dest).Elem()
 	rtElem := rtSlice.Elem()
@@ -144,19 +130,6 @@ func (p *RedisProvider) getByKeys(dest interface{}, keys ...string) error {
 
 func (p *RedisProvider) Delete(key string) {
 	p.rdb.Del(p.ctx, key).Result()
-}
-
-func (p *RedisProvider) DeleteByPattern(pattern string) {
-	keys, err := p.rdb.Keys(p.ctx, pattern).Result()
-	if err != nil {
-		return
-	}
-	p.rdb.Del(p.ctx, keys...)
-}
-
-func (p *RedisProvider) DeleteRange(keyFrom string, keyTo string) {
-	keys := p.getKeysInRange(keyFrom, keyTo)
-	p.rdb.Del(p.ctx, keys...)
 }
 
 func (p *RedisProvider) getKeysInRange(from, to string) []string {
@@ -178,4 +151,13 @@ func (p *RedisProvider) getKeysInRange(from, to string) []string {
 		}
 	}
 	return inRangeKeys
+}
+
+func (p *RedisProvider) Keys(pattern string) []string {
+	keys, _ := p.rdb.Keys(p.ctx, pattern).Result()
+	return keys
+}
+
+func (p *RedisProvider) KeyRanges(from, to string) []string {
+	return p.getKeysInRange(from, to)
 }

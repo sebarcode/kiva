@@ -3,6 +3,7 @@ package kiva_test
 import (
 	"fmt"
 	"io"
+	"reflect"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestSingle(t *testing.T) {
 				Created: time.Now(),
 			}
 
-			err := kv.Set("Data1", &data, nil)
+			err := kv.Set("Data1", &data, nil, false)
 			convey.So(err, convey.ShouldBeNil)
 			convey.Convey("validate object data", func() {
 				getData := allTypes{}
@@ -78,7 +79,7 @@ func TestSlice(t *testing.T) {
 				Created: time.Now(),
 			}
 			sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
-			if e = k.Set(sources[i].ID, sources[i], nil); e != nil {
+			if e = k.Set(sources[i].ID, sources[i], nil, false); e != nil {
 				break
 			}
 		}
@@ -87,7 +88,7 @@ func TestSlice(t *testing.T) {
 		convey.Convey("get data by pattern", func() {
 			pattern := "Data_*"
 			resDatas := []allTypes{}
-			e := k.GetByPattern(pattern, &resDatas)
+			e := k.GetByPattern(pattern, &resDatas, false)
 			convey.So(e, convey.ShouldBeNil)
 			convey.So(len(resDatas), convey.ShouldEqual, len(sources))
 
@@ -117,7 +118,7 @@ func TestSlice(t *testing.T) {
 			from := "Data_0200"
 			to := "Data_0299"
 			resDatas := []allTypes{}
-			e := k.GetRange(from, to, &resDatas)
+			e := k.GetRange(from, to, &resDatas, false)
 			convey.So(e, convey.ShouldBeNil)
 			convey.So(len(resDatas), convey.ShouldEqual, 100)
 
@@ -142,6 +143,87 @@ func TestSlice(t *testing.T) {
 				}
 			})
 		})
+
+		convey.Convey("delete", func() {
+			k.Delete(false, "Data_0301")
+			k.DeleteRange("Data_0320", "Data_0349", false)
+			keys := k.Keys("Data_*")
+			convey.So(len(keys), convey.ShouldEqual, 1000-31)
+
+			keys = k.KeyRanges("Data_0300", "Data_0399")
+			convey.So(len(keys), convey.ShouldEqual, 100-31)
+		})
+	})
+}
+
+func TestSyncDB(t *testing.T) {
+	convey.Convey("set 10 key with syncToDb", t, func() {
+		k, e := prepareKiva()
+		convey.So(e, convey.ShouldBeNil)
+		sources := make([]allTypes, 100)
+		for i := 0; i < 100; i++ {
+			sources[i] = allTypes{
+				ID:      fmt.Sprintf("DB_%04d", i),
+				Name:    fmt.Sprintf("DB_%d's Name", i),
+				Age:     codekit.RandInt(30) + 15,
+				Created: time.Now(),
+			}
+			sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
+			if e = k.Set(sources[i].ID, sources[i], nil, true); e != nil {
+				break
+			}
+		}
+		convey.So(e, convey.ShouldBeNil)
+
+		convey.Convey("validate provider", func() {
+			resDatas := []allTypes{}
+			e := k.GetByPattern("DB_*", &resDatas, false)
+			convey.So(e, convey.ShouldBeNil)
+			convey.So(len(resDatas), convey.ShouldEqual, len(sources))
+
+			//random check of 3 elements
+			for i := 0; i < 3; i++ {
+				index := codekit.RandInt(len(resDatas))
+				output := resDatas[index]
+				var source allTypes
+			getSource:
+				for y := 0; y < 1000; y++ {
+					if sources[y].ID == output.ID {
+						source = sources[y]
+						break getSource
+					}
+				}
+				convey.So(output.Name, convey.ShouldEqual, source.Name)
+				convey.So(output.Age, convey.ShouldEqual, source.Age)
+				convey.So(output.Salary, convey.ShouldEqual, source.Salary)
+				convey.So(output.Created.UnixMilli(), convey.ShouldAlmostEqual, source.Created.UnixMilli())
+			}
+		})
+
+		convey.Convey("validate db", func() {
+			resDatas := []allTypes{}
+			e := h.PopulateByFilter("TestTable", dbflex.StartWith("_id", "DB_"), 0, &resDatas)
+			convey.So(e, convey.ShouldBeNil)
+			convey.So(len(resDatas), convey.ShouldEqual, len(sources))
+
+			//random check of 3 elements
+			for i := 0; i < 3; i++ {
+				index := codekit.RandInt(len(resDatas))
+				output := resDatas[index]
+				var source allTypes
+			getSource:
+				for y := 0; y < 100; y++ {
+					if sources[y].ID == output.ID {
+						source = sources[y]
+						break getSource
+					}
+				}
+				convey.So(output.Name, convey.ShouldEqual, source.Name)
+				convey.So(output.Age, convey.ShouldEqual, source.Age)
+				convey.So(output.Salary, convey.ShouldEqual, source.Salary)
+				convey.So(output.Created.UnixMilli(), convey.ShouldAlmostEqual, source.Created.UnixMilli())
+			}
+		})
 	})
 }
 
@@ -150,36 +232,57 @@ func prepareKiva() (*kiva.Kiva, error) {
 	if err != nil {
 		return nil, err
 	}
-	kv, err := kiva.New(provider, kiva.GetterFunc(func(key1, key2 string, kind kiva.GetKind, res interface{}) error {
-		var f *dbflex.Filter
-		switch kind {
-		case kiva.GetByID:
-			f = dbflex.Eq("_id", key1)
+	kv, err := kiva.New(
+		provider,
+		kiva.GetterFunc(func(key1, key2 string, kind kiva.GetKind, res interface{}) error {
+			var f *dbflex.Filter
+			switch kind {
+			case kiva.GetByID:
+				f = dbflex.Eq("_id", key1)
 
-		case kiva.GetByPattern:
-			f = dbflex.StartWith("_id", key1)
+			case kiva.GetByPattern:
+				f = dbflex.StartWith("_id", key1)
 
-		case kiva.GetRange:
-			f = dbflex.Range("_id", key1, key2)
-		}
+			case kiva.GetRange:
+				f = dbflex.Range("_id", key1, key2)
+			}
 
-		ms := []codekit.M{}
-		if e := h.PopulateByFilter("TestTable", f, 0, &ms); e != nil {
-			return e
-		}
-		if len(ms) == 0 {
-			return io.EOF
-		}
-		*(res.(*int)) = ms[0].GetInt("Value")
-		return nil
-	}), &kiva.WriteOptions{
-		TTL: 15 * time.Minute,
-	})
+			ms := []codekit.M{}
+			if e := h.PopulateByFilter("TestTable", f, 0, &ms); e != nil {
+				return e
+			}
+			if len(ms) == 0 {
+				return io.EOF
+			}
+			*(res.(*int)) = ms[0].GetInt("Value")
+			return nil
+		}),
+		func(key1 string, value interface{}, op kiva.CommitKind) error {
+			isStruct := reflect.Indirect(reflect.ValueOf(value)).Kind() == reflect.Struct
+			w := dbflex.Eq("_id", key1)
+			switch op {
+			case kiva.CommitSave:
+				if isStruct {
+					return h.SaveAny("TestTable", value)
+				} else {
+					return h.SaveAny("TestTable", codekit.M{}.Set("_id", key1).Set("Value", value))
+				}
+
+			case kiva.CommitDelete:
+				cmd := dbflex.From("TestTable").Where(w).Delete()
+				_, e := h.Execute(cmd, nil)
+				return e
+			}
+			return nil
+		}, //committerfunc
+		&kiva.WriteOptions{
+			TTL: 15 * time.Minute,
+		})
 	return kv, err
 }
 
 type allTypes struct {
-	ID      string
+	ID      string `json:"_id" bson:"_id"`
 	Name    string
 	Age     int
 	Salary  float64

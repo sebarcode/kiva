@@ -13,18 +13,21 @@ type Provider interface {
 	Close()
 	Set(key string, value interface{}, opts *WriteOptions) error
 	Get(key string, dest interface{}) error
-	GetByPattern(pattern string, dest interface{}) error
-	GetRange(keyFrom, keyTo string, dest interface{}) error
 	Delete(key string)
-	DeleteByPattern(pattern string)
-	DeleteRange(keyFrom, keyTo string)
-	//Keys(pattern string) []string
+	Keys(pattern string) []string
+	KeyRanges(from, to string) []string
 }
 
 type GetKind string
+type CommitKind string
 
 const (
 	GetByID      GetKind = "eq"
-	GetByPattern GetKind = "startsWith"
+	GetByPattern GetKind = "pattern"
 	GetRange     GetKind = "between"
+)
+
+const (
+	CommitSave   CommitKind = "save"
+	CommitDelete CommitKind = "delete"
 )
