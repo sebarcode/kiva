@@ -14,6 +14,7 @@ import (
 	"github.com/eaciit/toolkit"
 	"github.com/sebarcode/codekit"
 	"github.com/sebarcode/kiva"
+	"github.com/sebarcode/kiva/kvsimple"
 	"github.com/smartystreets/goconvey/convey"
 )
 
@@ -233,7 +234,7 @@ func prepareKiva() (*kiva.Kiva, error) {
 			return nil, err
 		}
 	*/
-	provider := kiva.NewSimpleProvider(&kiva.WriteOptions{TTL: 30 * time.Minute})
+	provider := kvsimple.New(&kiva.WriteOptions{TTL: 30 * time.Minute})
 	kv, err := kiva.New(
 		provider,
 		func(key1, key2 string, kind kiva.GetKind, res interface{}) error {

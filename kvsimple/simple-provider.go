@@ -1,4 +1,4 @@
-package kiva
+package kvsimple
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sebarcode/codekit"
+	"github.com/sebarcode/kiva"
 )
 
 type simpleProvideItem struct {
@@ -17,7 +18,7 @@ type simpleProvideItem struct {
 }
 
 type SimpleProvider struct {
-	defaultWriteOptions *WriteOptions
+	defaultWriteOptions *kiva.WriteOptions
 	keys                []string
 	data                map[string]simpleProvideItem
 
@@ -26,7 +27,7 @@ type SimpleProvider struct {
 	mtx    *sync.RWMutex
 }
 
-func NewSimpleProvider(opts *WriteOptions) Provider {
+func New(opts *kiva.WriteOptions) kiva.Provider {
 	s := new(SimpleProvider)
 	s.defaultWriteOptions = opts
 	s.data = make(map[string]simpleProvideItem)
@@ -37,7 +38,7 @@ func NewSimpleProvider(opts *WriteOptions) Provider {
 	s.mtx = new(sync.RWMutex)
 
 	if opts == nil {
-		opts = new(WriteOptions)
+		opts = new(kiva.WriteOptions)
 	}
 	if opts.TTL == 0 {
 		opts.TTL = 24 * time.Hour
@@ -92,7 +93,7 @@ func (p *SimpleProvider) DataCleansing() {
 	}
 }
 
-func (p *SimpleProvider) Set(key string, value interface{}, opts *WriteOptions) error {
+func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOptions) error {
 	if codekit.IsPointer(value) {
 		value = reflect.Indirect(reflect.ValueOf(value)).Interface()
 	}
