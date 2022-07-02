@@ -94,6 +94,9 @@ func (p *SimpleProvider) DataCleansing() {
 }
 
 func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOptions) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
 	if codekit.IsPointer(value) {
 		value = reflect.Indirect(reflect.ValueOf(value)).Interface()
 	}
@@ -149,6 +152,9 @@ func (p *SimpleProvider) Get(key string, dest interface{}) error {
 }
 
 func (p *SimpleProvider) Delete(key string) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
 	delete(p.data, key)
 	keys := []string{}
 	for _, k := range p.keys {

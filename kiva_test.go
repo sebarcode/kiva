@@ -166,6 +166,15 @@ func TestSlice(t *testing.T) {
 
 			keys = k.KeyRanges("Data_0300", "Data_0399")
 			convey.So(len(keys), convey.ShouldEqual, 100-31)
+
+			convey.Convey("delete by pattern", func() {
+				resDatas := []allTypes{}
+				pattern := "Data_*"
+				k.DeleteByPattern(pattern, true)
+				e = k.GetByPattern(pattern, &resDatas, false)
+				convey.So(e, convey.ShouldBeNil)
+				convey.So(len(resDatas), convey.ShouldEqual, 0)
+			})
 		})
 	})
 }
@@ -237,6 +246,13 @@ func TestSyncDB(t *testing.T) {
 				convey.So(output.Salary, convey.ShouldEqual, source.Salary)
 				convey.So(output.Created.UnixMilli(), convey.ShouldAlmostEqual, source.Created.UnixMilli())
 			}
+
+			convey.Convey("clear db", func() {
+				k.DeleteByPattern("DB_*", true)
+				e := h.PopulateByFilter("TestTable", dbflex.StartWith("_id", "DB_"), 0, &resDatas)
+				convey.So(e, convey.ShouldBeNil)
+				convey.So(len(resDatas), convey.ShouldEqual, 0)
+			})
 		})
 	})
 }
