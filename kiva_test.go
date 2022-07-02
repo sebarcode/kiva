@@ -2,8 +2,6 @@ package kiva_test
 
 import (
 	"fmt"
-	"io"
-	"reflect"
 	"testing"
 	"time"
 
@@ -19,9 +17,10 @@ import (
 )
 
 var (
-	logger  = appkit.LogWithPrefix("kvtest")
-	connTxt = "mongodb://localhost:27017/testdb"
-	h       = datahub.NewHubWithOpts(datahub.GeneralDbConnBuilder(connTxt), &datahub.HubOptions{UsePool: true, PoolSize: 20})
+	logger    = appkit.LogWithPrefix("kvtest")
+	connTxt   = "mongodb://localhost:27017/testdb"
+	h         = datahub.NewHubWithOpts(datahub.GeneralDbConnBuilder(connTxt), &datahub.HubOptions{UsePool: true, PoolSize: 20})
+	tableName = "TestTable"
 )
 
 func TestSingle(t *testing.T) {
@@ -30,23 +29,23 @@ func TestSingle(t *testing.T) {
 		convey.So(err, convey.ShouldBeNil)
 
 		convey.Convey("classic db data", func() {
-			err := h.SaveAny("TestTable", codekit.M{}.Set("_id", "Key1").Set("Value", 100))
+			err := h.SaveAny(tableName, codekit.M{}.Set("_id", "Key1").Set("Value", 100))
 			convey.So(err, convey.ShouldBeNil)
 			convey.Convey("get data", func() {
 				destInt := int(0)
-				err = kv.Get("Key1", &destInt)
+				err = kv.Get(tableName+":Key1", &destInt)
 				convey.So(err, convey.ShouldBeNil)
 				convey.So(destInt, convey.ShouldEqual, 100)
 
-				h.SaveAny("TestTable", codekit.M{}.Set("_id", "Key1").Set("Value", 150))
+				h.SaveAny(tableName, codekit.M{}.Set("_id", "Key1").Set("Value", 150))
 				convey.Convey("should read from memory", func() {
-					err = kv.Get("Key1", &destInt)
+					err = kv.Get(tableName+":Key1", &destInt)
 					convey.So(err, convey.ShouldBeNil)
 					convey.So(destInt, convey.ShouldEqual, 100)
 
-					kv.Delete(false, "Key1")
+					kv.Delete(false, tableName+":Key1")
 					convey.Convey("should read from db", func() {
-						err = kv.Get("Key1", &destInt)
+						err = kv.Get(tableName+":Key1", &destInt)
 						convey.So(err, convey.ShouldBeNil)
 						convey.So(destInt, convey.ShouldEqual, 150)
 					})
@@ -64,11 +63,11 @@ func TestSingle(t *testing.T) {
 				Created: time.Now(),
 			}
 
-			err := kv.Set("Data1", &data, nil, false)
+			err := kv.Set(tableName+":"+"Data1", &data, nil, false)
 			convey.So(err, convey.ShouldBeNil)
 			convey.Convey("validate object data", func() {
 				getData := allTypes{}
-				err := kv.Get("Data1", &getData)
+				err := kv.Get(tableName+":"+"Data1", &getData)
 				convey.So(err, convey.ShouldBeNil)
 				convey.So(getData.Name, convey.ShouldEqual, data.Name)
 				convey.So(getData.Age, convey.ShouldEqual, data.Age)
@@ -93,14 +92,14 @@ func TestSlice(t *testing.T) {
 				Created: time.Now(),
 			}
 			sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
-			if e = k.Set(sources[i].ID, sources[i], nil, false); e != nil {
+			if e = k.Set(tableName+":"+sources[i].ID, sources[i], nil, false); e != nil {
 				break
 			}
 		}
 		convey.So(e, convey.ShouldBeNil)
 
 		convey.Convey("get data by pattern", func() {
-			pattern := "Data_*"
+			pattern := tableName + ":" + "Data_*"
 			resDatas := []allTypes{}
 			e := k.GetByPattern(pattern, &resDatas, false)
 			convey.So(e, convey.ShouldBeNil)
@@ -129,8 +128,8 @@ func TestSlice(t *testing.T) {
 		})
 
 		convey.Convey("get data by range", func() {
-			from := "Data_0200"
-			to := "Data_0299"
+			from := tableName + ":" + "Data_0200"
+			to := tableName + ":" + "Data_0299"
 			resDatas := []allTypes{}
 			e := k.GetRange(from, to, &resDatas, false)
 			convey.So(e, convey.ShouldBeNil)
@@ -159,17 +158,17 @@ func TestSlice(t *testing.T) {
 		})
 
 		convey.Convey("delete", func() {
-			k.Delete(false, "Data_0301")
-			k.DeleteRange("Data_0320", "Data_0349", false)
-			keys := k.Keys("Data_*")
+			k.Delete(false, tableName+":"+"Data_0301")
+			k.DeleteRange(tableName+":"+"Data_0320", tableName+":"+"Data_0349", false)
+			keys := k.Keys(tableName + ":" + "Data_*")
 			convey.So(len(keys), convey.ShouldEqual, 1000-31)
 
-			keys = k.KeyRanges("Data_0300", "Data_0399")
+			keys = k.KeyRanges(tableName+":"+"Data_0300", tableName+":"+"Data_0399")
 			convey.So(len(keys), convey.ShouldEqual, 100-31)
 
 			convey.Convey("delete by pattern", func() {
 				resDatas := []allTypes{}
-				pattern := "Data_*"
+				pattern := tableName + ":" + "Data_*"
 				k.DeleteByPattern(pattern, true)
 				e = k.GetByPattern(pattern, &resDatas, false)
 				convey.So(e, convey.ShouldBeNil)
@@ -192,7 +191,7 @@ func TestSyncDB(t *testing.T) {
 				Created: time.Now(),
 			}
 			sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
-			if e = k.Set(sources[i].ID, sources[i], nil, true); e != nil {
+			if e = k.Set(tableName+":"+sources[i].ID, sources[i], nil, true); e != nil {
 				break
 			}
 		}
@@ -200,7 +199,7 @@ func TestSyncDB(t *testing.T) {
 
 		convey.Convey("validate provider", func() {
 			resDatas := []allTypes{}
-			e := k.GetByPattern("DB_*", &resDatas, false)
+			e := k.GetByPattern(tableName+":"+"DB_*", &resDatas, false)
 			convey.So(e, convey.ShouldBeNil)
 			convey.So(len(resDatas), convey.ShouldEqual, len(sources))
 
@@ -225,7 +224,7 @@ func TestSyncDB(t *testing.T) {
 
 		convey.Convey("validate db", func() {
 			resDatas := []allTypes{}
-			e := h.PopulateByFilter("TestTable", dbflex.StartWith("_id", "DB_"), 0, &resDatas)
+			e := h.PopulateByFilter(tableName, dbflex.StartWith("_id", "DB_"), 0, &resDatas)
 			convey.So(e, convey.ShouldBeNil)
 			convey.So(len(resDatas), convey.ShouldEqual, len(sources))
 
@@ -247,9 +246,16 @@ func TestSyncDB(t *testing.T) {
 				convey.So(output.Created.UnixMilli(), convey.ShouldAlmostEqual, source.Created.UnixMilli())
 			}
 
+			convey.Convey("get ranges", func() {
+				k.DeleteByPattern(tableName+":"+"DB_*", false)
+				e = k.GetRange(tableName+":"+"DB_0015", tableName+":"+"DB_0020", &resDatas, true)
+				convey.So(e, convey.ShouldBeNil)
+				convey.So(len(resDatas), convey.ShouldEqual, 6)
+			})
+
 			convey.Convey("clear db", func() {
-				k.DeleteByPattern("DB_*", true)
-				e := h.PopulateByFilter("TestTable", dbflex.StartWith("_id", "DB_"), 0, &resDatas)
+				k.DeleteByPattern(tableName+":"+"DB_*", true)
+				e := h.PopulateByFilter(tableName, dbflex.StartWith("_id", "DB_"), 0, &resDatas)
 				convey.So(e, convey.ShouldBeNil)
 				convey.So(len(resDatas), convey.ShouldEqual, 0)
 			})
@@ -267,47 +273,8 @@ func prepareKiva() (*kiva.Kiva, error) {
 	provider := kvsimple.New(&kiva.WriteOptions{TTL: 30 * time.Minute})
 	kv, err := kiva.New(
 		provider,
-		func(key1, key2 string, kind kiva.GetKind, res interface{}) error {
-			var f *dbflex.Filter
-			switch kind {
-			case kiva.GetByID:
-				f = dbflex.Eq("_id", key1)
-
-			case kiva.GetByPattern:
-				f = dbflex.StartWith("_id", key1)
-
-			case kiva.GetRange:
-				f = dbflex.Range("_id", key1, key2)
-			}
-
-			ms := []codekit.M{}
-			if e := h.PopulateByFilter("TestTable", f, 0, &ms); e != nil {
-				return e
-			}
-			if len(ms) == 0 {
-				return io.EOF
-			}
-			*(res.(*int)) = ms[0].GetInt("Value")
-			return nil
-		},
-		func(key1 string, value interface{}, op kiva.CommitKind) error {
-			isStruct := reflect.Indirect(reflect.ValueOf(value)).Kind() == reflect.Struct
-			w := dbflex.Eq("_id", key1)
-			switch op {
-			case kiva.CommitSave:
-				if isStruct {
-					return h.SaveAny("TestTable", value)
-				} else {
-					return h.SaveAny("TestTable", codekit.M{}.Set("_id", key1).Set("Value", value))
-				}
-
-			case kiva.CommitDelete:
-				cmd := dbflex.From("TestTable").Where(w).Delete()
-				_, e := h.Execute(cmd, nil)
-				return e
-			}
-			return nil
-		}, //committerfunc
+		kiva.BaseGetter(h, "_id"),
+		kiva.BaseCommitter(h, "_id"),
 		&kiva.WriteOptions{
 			TTL: 15 * time.Minute,
 		})
