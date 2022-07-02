@@ -1,9 +1,11 @@
 package kiva
 
 import (
+	"context"
 	"io"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sebarcode/codekit"
@@ -18,12 +20,30 @@ type SimpleProvider struct {
 	defaultWriteOptions *WriteOptions
 	keys                []string
 	data                map[string]simpleProvideItem
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	mtx    *sync.RWMutex
 }
 
 func NewSimpleProvider(opts *WriteOptions) Provider {
 	s := new(SimpleProvider)
 	s.defaultWriteOptions = opts
 	s.data = make(map[string]simpleProvideItem)
+
+	ctx, cf := context.WithCancel(context.Background())
+	s.ctx = ctx
+	s.cancel = cf
+	s.mtx = new(sync.RWMutex)
+
+	if opts == nil {
+		opts = new(WriteOptions)
+	}
+	if opts.TTL == 0 {
+		opts.TTL = 24 * time.Hour
+	}
+
+	go s.DataCleansing()
 	return s
 }
 
@@ -32,6 +52,44 @@ func (p *SimpleProvider) Connect() error {
 }
 
 func (p *SimpleProvider) Close() {
+	if p.ctx != nil {
+		p.cancel()
+		p.ctx = nil
+	}
+}
+
+func (p *SimpleProvider) DataCleansing() {
+	for {
+		select {
+		case <-time.After(1 * time.Second):
+			p.mtx.Lock()
+			func() {
+				defer p.mtx.Unlock()
+
+				removedKeys := []string{}
+				for k, i := range p.data {
+					if i.Expiry.After(time.Now()) {
+						removedKeys = append(removedKeys, k)
+					}
+				}
+
+				for _, key := range removedKeys {
+					delete(p.data, key)
+				}
+
+				newKeys := []string{}
+				for _, key := range p.keys {
+					if !codekit.HasMember(removedKeys, key) {
+						newKeys = append(newKeys, key)
+					}
+				}
+				p.keys = newKeys
+			}()
+
+		case <-p.ctx.Done():
+			return
+		}
+	}
 }
 
 func (p *SimpleProvider) Set(key string, value interface{}, opts *WriteOptions) error {
@@ -44,9 +102,7 @@ func (p *SimpleProvider) Set(key string, value interface{}, opts *WriteOptions) 
 	if opts == nil {
 		opts = p.defaultWriteOptions
 	}
-	if opts.TTL != time.Duration(0) {
-		item.Expiry = time.Now().Add(opts.TTL)
-	}
+	item.Expiry = time.Now().Add(opts.TTL)
 	p.data[key] = item
 
 	found := false
@@ -82,6 +138,10 @@ func (p *SimpleProvider) Get(key string, dest interface{}) error {
 	v, ok := p.data[key]
 	if ok {
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(v.Data))
+		if p.defaultWriteOptions.TTL != 0 && time.Until(v.Expiry) < 5*time.Second {
+			v.Expiry = time.Now().Add(p.defaultWriteOptions.TTL)
+			p.data[key] = v
+		}
 		return nil
 	}
 	return io.EOF
