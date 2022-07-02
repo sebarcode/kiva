@@ -37,6 +37,20 @@ func TestSingle(t *testing.T) {
 				err = kv.Get("Key1", &destInt)
 				convey.So(err, convey.ShouldBeNil)
 				convey.So(destInt, convey.ShouldEqual, 100)
+
+				h.SaveAny("TestTable", codekit.M{}.Set("_id", "Key1").Set("Value", 150))
+				convey.Convey("should read from memory", func() {
+					err = kv.Get("Key1", &destInt)
+					convey.So(err, convey.ShouldBeNil)
+					convey.So(destInt, convey.ShouldEqual, 100)
+
+					kv.Delete(false, "Key1")
+					convey.Convey("should read from db", func() {
+						err = kv.Get("Key1", &destInt)
+						convey.So(err, convey.ShouldBeNil)
+						convey.So(destInt, convey.ShouldEqual, 150)
+					})
+				})
 			})
 		})
 
