@@ -161,6 +161,7 @@ func (k *Kiva) Set(key string, value interface{}, opts *WriteOptions, syncToDB b
 		if e := k.commiter(key, value, CommitSave); e != nil {
 			return fmt.Errorf("commit error. %s", e.Error())
 		}
+		k.provider.UpdateLastSyncTime(key)
 	}
 	return nil
 }

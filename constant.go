@@ -13,9 +13,10 @@ const (
 )
 
 type WriteOptions struct {
-	TTL        time.Duration
-	SyncKind   SyncKindEnum
-	ExpiryKind ExpiryKindEnum
+	TTL               time.Duration
+	SyncKind          SyncKindEnum
+	SyncEveryInSecond int
+	ExpiryKind        ExpiryKindEnum
 }
 
 type SyncBatchOptions struct {

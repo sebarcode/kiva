@@ -21,4 +21,6 @@ type ItemOptions struct {
 	ExpiryKind           ExpiryKindEnum
 	ExpiryExtendDuration time.Duration
 	SyncKind             SyncKindEnum
+	SyncEveryInSecond    int
+	LastSync             time.Time
 }

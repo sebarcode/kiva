@@ -14,4 +14,6 @@ type Provider interface {
 	SetContext(ctx context.Context)
 	Context() context.Context
 	ChangeSyncOpts(key string, opts *ItemOptions) error
+	UpdateLastSyncTime(key string) error
+	ItemOpts(key string) *ItemOptions
 }

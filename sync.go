@@ -26,9 +26,18 @@ func (kv *Kiva) Sync() {
 					if opt.SyncKind == SyncNone {
 						break
 					}
+
 					// data exist on hs
 					switch opt.SyncDirection {
 					case SyncToHots:
+						// get difference from last sync
+						if opt.SyncEveryInSecond != 0 {
+							syncDiff := time.Since(opt.LastSync)
+							if syncDiff < time.Duration(opt.SyncEveryInSecond)*time.Second {
+								break
+							}
+						}
+
 						if kv.getter == nil {
 							break
 						}
@@ -42,6 +51,7 @@ func (kv *Kiva) Sync() {
 						}
 						item = newItem
 						kv.Set(key, item, &kv.opts.DefaultWrite, false)
+						kv.provider.UpdateLastSyncTime(key)
 
 					case SyncToPersistent:
 						if kv.commiter == nil {
@@ -53,6 +63,7 @@ func (kv *Kiva) Sync() {
 						}
 						opt.SyncDirection = SyncToHots
 						kv.provider.ChangeSyncOpts(key, opt)
+						kv.provider.UpdateLastSyncTime(key)
 					}
 
 				} else {

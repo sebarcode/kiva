@@ -11,7 +11,7 @@ I am not really sure what is the name of this concept, but definitely is not new
 - Check on hot data storage first, if exist take it
 - If not read from persistent storage
 - if not exist on persistent storage return error
-- if exist on persistent storage save it to local storage and return the value
+- if exist on persistent storage, then save it to hots storage and return the value
 - Mantain lifetime of every single data on hot storage, if not it will cost you memory usage
 - Dispose data from hot storage if its lifetime has been reach
 
@@ -19,8 +19,21 @@ I am not really sure what is the name of this concept, but definitely is not new
 - Write to hot storage
 - Mandate system to immidiately write to persistent storage or periodically thru batch
 
+## Sync Data
+- Sync will be run automatically on bckground, nothing we need to do
+- Will be trigger as a batch periodically
+- Get all keys
+- Iterate for all keys
+- If keys already expired, delete it
+- If keys still valid, check for its syncDirection
+- If SYNC_TO_PERSISTENT_STORAGE then run committer
+- If SYNC_TO_HOTS_STORAGE then get latest and update hot storage
+
 # The Catch
-To use Kiva we will need 3 things:
+To use Kiva we will need 4 things:
 - a GetterFunction implementation to read data directly from persistent storage
 - a SetterFunction implmentation to store data into persistent storage
+- a ItemReflectorFunction implementation, this function is used on sync process, to define template of new item for each table
 - a Kiva Provider implementation to manage read and write data into hot storage
+
+*NOTE: all data should table should consist of same datatype, if not, panic may happen. Need to work on this to anticipate panic

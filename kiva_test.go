@@ -21,7 +21,7 @@ type storage map[string]interface{}
 var (
 	tableName     = "dataku"
 	sourceStorage = map[string]storage{}
-	mtx           = new(sync.Mutex)
+	mtx           = new(sync.RWMutex)
 )
 
 func init() {
@@ -386,7 +386,8 @@ func prepareKiva() (*kiva.Kiva, error) {
 		mySetter,
 		&kiva.KivaOptions{
 			DefaultWrite: kiva.WriteOptions{
-				TTL: 15 * time.Minute,
+				TTL:               10 * time.Second,
+				SyncEveryInSecond: 5,
 			},
 			SyncBatch: kiva.SyncBatchOptions{
 				EveryInSecond:       5,
@@ -416,6 +417,9 @@ func myReflector(tableName string) interface{} {
 }
 
 func myGetter(key1, key2 string, kind kiva.GetKind, dest interface{}) error {
+	mtx.RLock()
+	defer mtx.RUnlock()
+
 	tableName, keyFind, err := kiva.ParseKey(key1)
 	if err != nil {
 		return err
@@ -437,6 +441,7 @@ func myGetter(key1, key2 string, kind kiva.GetKind, dest interface{}) error {
 	single := false
 	items := []interface{}{}
 	switch kind {
+
 	case kiva.GetByID:
 		data, ok := storage[keyFind]
 		if !ok {

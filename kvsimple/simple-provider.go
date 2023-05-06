@@ -75,6 +75,8 @@ func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOpti
 			ExpiryKind:           opts.ExpiryKind,
 			ExpiryExtendDuration: opts.TTL,
 			SyncKind:             opts.SyncKind,
+			SyncEveryInSecond:    opts.SyncEveryInSecond,
+			LastSync:             time.Now(),
 		},
 	}
 
@@ -177,6 +179,7 @@ func (p *SimpleProvider) ChangeSyncOpts(key string, opts *kiva.ItemOptions) erro
 
 	item.opts.SyncDirection = opts.SyncDirection
 	item.opts.SyncKind = opts.SyncKind
+	item.opts.SyncEveryInSecond = opts.SyncEveryInSecond
 	p.data[key] = item
 
 	return nil
@@ -192,4 +195,26 @@ func (p *SimpleProvider) RenewExpiry(key string) error {
 	p.data[key] = item
 
 	return nil
+}
+
+func (p *SimpleProvider) UpdateLastSyncTime(key string) error {
+	item, hasItem := p.data[key]
+	if !hasItem {
+		return errors.New("ket not found")
+	}
+
+	item.opts.LastSync = time.Now()
+	item.opts.SyncDirection = kiva.SyncToHots
+	p.data[key] = item
+
+	return nil
+}
+
+func (p *SimpleProvider) ItemOpts(key string) *kiva.ItemOptions {
+	item, hasItem := p.data[key]
+	if !hasItem {
+		return nil
+	}
+
+	return item.opts
 }
