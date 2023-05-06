@@ -31,6 +31,8 @@ func init() {
 
 func TestSingle(t *testing.T) {
 	convey.Convey("Preparing", t, func() {
+		tableName = "dataint"
+		sourceStorage[tableName] = storage{}
 		kv, err := prepareKiva()
 		convey.So(err, convey.ShouldBeNil)
 		sourceStorage[tableName]["Key1"] = map[string]interface{}{"_id": 1, "Value": 100}
@@ -84,6 +86,8 @@ func TestSingle(t *testing.T) {
 }
 
 func TestSlice(t *testing.T) {
+	tableName = "dataslice"
+	sourceStorage[tableName] = storage{}
 	convey.Convey("inject", t, func() {
 		k, e := prepareKiva()
 		convey.So(e, convey.ShouldBeNil)
@@ -184,7 +188,9 @@ func TestSlice(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
-	convey.Convey("set 10 key with syncToDb", t, func() {
+	tableName = "dataku"
+	sourceStorage[tableName] = storage{}
+	convey.Convey("set 100 key with syncToDb", t, func() {
 		k, e := prepareKiva()
 		convey.So(e, convey.ShouldBeNil)
 		sources := make([]allTypes, 100)
@@ -196,7 +202,7 @@ func TestSync(t *testing.T) {
 				Created: time.Now(),
 			}
 			sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
-			if e = k.Set(tableName+":"+sources[i].ID, sources[i], nil, true); e != nil {
+			if e = k.Set(tableName+":"+sources[i].ID, sources[i], &kiva.WriteOptions{SyncKind: kiva.SyncNow}, true); e != nil {
 				break
 			}
 		}
@@ -280,7 +286,9 @@ func TestSync(t *testing.T) {
 	})
 }
 
-func TestSyncBackground(t *testing.T) {
+func TestBg(t *testing.T) {
+	tableName = "dataku"
+	sourceStorage[tableName] = storage{}
 	convey.Convey("Test sync background", t, func() {
 		convey.Convey("Insert data valid for 10s, sync every 5s", func() {
 			k, e := prepareKiva()
@@ -318,10 +326,11 @@ func TestSyncBackground(t *testing.T) {
 					time.Sleep(4 * time.Second)
 					persistenceStorage = sourceStorage[tableName]
 					hslen := len(persistenceStorage)
-					convey.So(hslen, convey.ShouldEqual, 100)
+
 					_, hasR5 := persistenceStorage["DB_0005"]
 					_, hasR15 := persistenceStorage["DB_0015"]
 					_, hasR50 := persistenceStorage["DB_0050"]
+					convey.So(hslen, convey.ShouldEqual, 100)
 					convey.So(hasR5, convey.ShouldBeTrue)
 					convey.So(hasR15, convey.ShouldBeTrue)
 					convey.So(hasR50, convey.ShouldBeTrue)
@@ -345,7 +354,9 @@ func TestSyncBackground(t *testing.T) {
 						convey.Convey("Change and remove data, then check after 12s", func() {
 							persistenceStorage = sourceStorage[tableName]
 							psR3 := persistenceStorage["DB_0003"].(map[string]interface{})
-							psR3["Value"].(map[string]interface{})["Name"] = "Changed"
+							psR3Val := psR3["Value"].(allTypes)
+							psR3Val.Name = "Changed"
+							psR3["Value"] = psR3Val
 							persistenceStorage["DB_0003"] = psR3
 							delete(persistenceStorage, "DB_0004")
 							sourceStorage[tableName] = persistenceStorage
@@ -368,9 +379,10 @@ func TestSyncBackground(t *testing.T) {
 }
 
 func prepareKiva() (*kiva.Kiva, error) {
-	provider := kvsimple.New(&kiva.WriteOptions{TTL: 30 * time.Minute})
+	provider := kvsimple.New()
 	kv, err := kiva.New(
 		provider,
+		myReflector,
 		myGetter,
 		mySetter,
 		&kiva.KivaOptions{
@@ -392,6 +404,16 @@ type allTypes struct {
 	Salary  float64
 	Roles   []string
 	Created time.Time
+}
+
+func myReflector(tableName string) interface{} {
+	switch tableName {
+	case "dataint":
+		return int(0)
+
+	default:
+		return map[string]interface{}{}
+	}
 }
 
 func myGetter(key1, key2 string, kind kiva.GetKind, dest interface{}) error {

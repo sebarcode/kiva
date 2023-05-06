@@ -19,16 +19,20 @@ func (kv *Kiva) Sync() {
 		case <-time.After(time.Duration(kv.opts.SyncBatch.EveryInSecond) * time.Second):
 			keys := kv.provider.Keys("*")
 			for _, key := range keys {
-				item := map[string]interface{}{}
+				tableName, _, _ := ParseKey(key)
+				item := kv.reflector(tableName)
 				opt, err := kv.provider.Get(key, &item)
 				if err == nil {
+					if opt.SyncKind == SyncNone {
+						break
+					}
 					// data exist on hs
 					switch opt.SyncDirection {
 					case SyncToHots:
 						if kv.getter == nil {
 							break
 						}
-						newItem := map[string]interface{}{}
+						newItem := kv.reflector(tableName)
 						getterErr := kv.getter(key, "", GetByID, &newItem)
 						if getterErr == io.EOF {
 							kv.provider.Delete(key)

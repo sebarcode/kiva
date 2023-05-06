@@ -29,20 +29,11 @@ type SimpleProvider struct {
 	ctx context.Context
 }
 
-func New(opts *kiva.WriteOptions) kiva.Provider {
+func New() kiva.Provider {
 	s := new(SimpleProvider)
-	s.defaultWriteOptions = opts
 	s.data = make(map[string]*providerItem)
-
+	s.keys = []string{}
 	s.mtx = new(sync.RWMutex)
-
-	if opts == nil {
-		opts = new(kiva.WriteOptions)
-	}
-	if opts.TTL == 0 {
-		opts.TTL = 24 * time.Hour
-	}
-
 	return s
 }
 

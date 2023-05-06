@@ -11,7 +11,6 @@ const (
 	ExpiryAbsolute ExpiryKindEnum = "ABSOLUTE"
 	ExpiryExtended ExpiryKindEnum = "EXTENDED"
 
-	SyncNone         SyncDirectionEnum = "NONE"
 	SyncToPersistent SyncDirectionEnum = "UPDATE_PERSISTENT"
 	SyncToHots       SyncDirectionEnum = "UPDATE_HOT_STORAGE"
 )

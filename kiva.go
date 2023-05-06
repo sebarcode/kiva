@@ -10,18 +10,20 @@ import (
 
 type GetterFunc func(key1, key2 string, op GetKind, dest interface{}) error
 type CommitFunc func(key1 string, value interface{}, op CommitKind) error
+type ItemReflectorFunc func(tablename string) interface{}
 
 type Kiva struct {
-	provider Provider
-	commiter CommitFunc
-	getter   GetterFunc
+	provider  Provider
+	commiter  CommitFunc
+	getter    GetterFunc
+	reflector ItemReflectorFunc
 
 	opts *KivaOptions
 
 	ctx context.Context
 }
 
-func New(provider Provider, getter GetterFunc, committer CommitFunc, opts *KivaOptions) (*Kiva, error) {
+func New(provider Provider, reflector ItemReflectorFunc, getter GetterFunc, committer CommitFunc, opts *KivaOptions) (*Kiva, error) {
 	if e := provider.Connect(); e != nil {
 		return nil, errors.New("unable to connect to provider. " + e.Error())
 	}
@@ -31,6 +33,7 @@ func New(provider Provider, getter GetterFunc, committer CommitFunc, opts *KivaO
 	k.provider = provider
 	k.getter = getter
 	k.commiter = committer
+	k.reflector = reflector
 	k.opts = opts
 
 	k.provider.SetContext(k.ctx)

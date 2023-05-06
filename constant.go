@@ -7,6 +7,7 @@ import (
 type SyncKindEnum string
 
 const (
+	SyncNone  SyncKindEnum = "NONE"
 	SyncNow   SyncKindEnum = "NOW"
 	SyncBatch SyncKindEnum = "BATCH"
 )
