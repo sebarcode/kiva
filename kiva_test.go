@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ariefdarmawan/serde"
-	"github.com/eaciit/toolkit"
 	"github.com/sebarcode/codekit"
 	"github.com/sebarcode/kiva"
 	"github.com/sebarcode/kiva/kvsimple"
@@ -100,7 +99,7 @@ func TestSlice(t *testing.T) {
 				Age:     codekit.RandInt(30) + 15,
 				Created: time.Now(),
 			}
-			sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
+			sources[i].Salary = float64(sources[i].Age) * 100 * float64(codekit.RandInt(10)/10)
 			if e = k.Set(tableName+":"+sources[i].ID, sources[i], nil, false); e != nil {
 				break
 			}
@@ -201,7 +200,7 @@ func TestSync(t *testing.T) {
 				Age:     codekit.RandInt(30) + 15,
 				Created: time.Now(),
 			}
-			sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
+			sources[i].Salary = float64(sources[i].Age) * 100 * float64(codekit.RandInt(10)/10)
 			if e = k.Set(tableName+":"+sources[i].ID, sources[i], &kiva.WriteOptions{SyncKind: kiva.SyncNow}, true); e != nil {
 				break
 			}
@@ -301,7 +300,7 @@ func TestBg(t *testing.T) {
 					Age:     codekit.RandInt(30) + 15,
 					Created: time.Now(),
 				}
-				sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
+				sources[i].Salary = float64(sources[i].Age) * 100 * float64(codekit.RandInt(10)/10)
 				if e = k.Set(tableName+":"+sources[i].ID, sources[i], &kiva.WriteOptions{
 					TTL:        10 * time.Second,
 					SyncKind:   kiva.SyncBatch,
