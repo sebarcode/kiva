@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 )
 
 type GetterFunc func(key1, key2 string, op GetKind, dest interface{}) error
@@ -42,8 +43,8 @@ func New(provider Provider, getter GetterFunc, committer CommitFunc, opts *KivaO
 }
 
 func (k *Kiva) Get(key string, dest interface{}) error {
-	v := k.provider.Get(key)
-	if e := v.Error; e != nil {
+	opts, e := k.provider.Get(key, dest)
+	if e != nil {
 		if k.getter == nil {
 			return fmt.Errorf("kv getter: invalid getter")
 		}
@@ -58,11 +59,19 @@ func (k *Kiva) Get(key string, dest interface{}) error {
 		if e = k.provider.Set(key, destValue, &k.opts.DefaultWrite); e != nil {
 			return fmt.Errorf("kv setter: %s", e.Error())
 		}
-	} else {
-		e = v.StoreTo(dest)
-		if e != nil {
-			return fmt.Errorf("kv getter cast: %s", e.Error())
+		opts = &ItemOptions{
+			Expiry:        time.Now().Add(k.opts.DefaultWrite.TTL),
+			SyncDirection: SyncToHots,
+			ExpiryKind:    k.opts.DefaultWrite.ExpiryKind,
+			SyncKind:      k.opts.DefaultWrite.SyncKind,
 		}
+	}
+	if opts.ExpiryKind == ExpiryExtended {
+		opts.Expiry = opts.Expiry.Add(opts.ExpiryExtendDuration)
+	}
+	if opts.Expiry.Before(time.Now()) {
+		k.provider.Delete(key)
+		return errors.New("item is expired")
 	}
 	return nil
 }
@@ -125,13 +134,12 @@ func (k *Kiva) getByKeys(dest interface{}, keys ...string) error {
 
 	buffers := reflect.MakeSlice(rtSlice, len(keys), len(keys))
 	for i, key := range keys {
-		var elem *Item
-		if elem = k.provider.Get(key); elem.Error != nil {
-			return fmt.Errorf("read data erorr. key %s. %s", key, elem.Error.Error())
-		}
 		newElem := reflect.New(rtElem).Interface()
-		if e := elem.StoreTo(newElem); e != nil {
-			return fmt.Errorf("read data erorr. cast %s. %s", key, elem.Error.Error())
+		var (
+			err error
+		)
+		if _, err = k.provider.Get(key, newElem); err != nil {
+			return fmt.Errorf("read data erorr. key %s. %s", key, err.Error())
 		}
 		buffers.Index(i).Set(reflect.ValueOf(newElem).Elem())
 	}
@@ -146,7 +154,7 @@ func (k *Kiva) Set(key string, value interface{}, opts *WriteOptions, syncToDB b
 	if e := k.provider.Set(key, value, opts); e != nil {
 		return e
 	}
-	if syncToDB && k.commiter != nil {
+	if (syncToDB && opts.SyncKind == SyncNow) && k.commiter != nil {
 		if e := k.commiter(key, value, CommitSave); e != nil {
 			return fmt.Errorf("commit error. %s", e.Error())
 		}

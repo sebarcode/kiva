@@ -2,21 +2,24 @@ package kiva
 
 import (
 	"time"
-
-	"github.com/ariefdarmawan/serde"
 )
 
-type Item struct {
-	Data   interface{}
-	Expiry time.Time
-	Synced bool
-	Error  error
-}
+type ExpiryKindEnum string
+type SyncDirectionEnum string
 
-func (i *Item) Set(v interface{}) {
-	i.Data = v
-}
+const (
+	ExpiryAbsolute ExpiryKindEnum = "ABSOLUTE"
+	ExpiryExtended ExpiryKindEnum = "EXTENDED"
 
-func (i *Item) StoreTo(dest interface{}) error {
-	return serde.Serde(i.Data, dest)
+	SyncNone         SyncDirectionEnum = "NONE"
+	SyncToPersistent SyncDirectionEnum = "UPDATE_PERSISTENT"
+	SyncToHots       SyncDirectionEnum = "UPDATE_HOT_STORAGE"
+)
+
+type ItemOptions struct {
+	Expiry               time.Time
+	SyncDirection        SyncDirectionEnum
+	ExpiryKind           ExpiryKindEnum
+	ExpiryExtendDuration time.Duration
+	SyncKind             SyncKindEnum
 }

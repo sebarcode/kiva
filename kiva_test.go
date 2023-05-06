@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ type storage map[string]interface{}
 var (
 	tableName     = "dataku"
 	sourceStorage = map[string]storage{}
+	mtx           = new(sync.Mutex)
 )
 
 func init() {
@@ -278,13 +280,94 @@ func TestSync(t *testing.T) {
 	})
 }
 
+func TestSyncBackground(t *testing.T) {
+	convey.Convey("Test sync background", t, func() {
+		convey.Convey("Insert data valid for 10s, sync every 5s", func() {
+			k, e := prepareKiva()
+			convey.So(e, convey.ShouldBeNil)
+			sources := make([]allTypes, 100)
+			for i := 0; i < 100; i++ {
+				sources[i] = allTypes{
+					ID:      fmt.Sprintf("DB_%04d", i),
+					Name:    fmt.Sprintf("DB_%d's Name", i),
+					Age:     codekit.RandInt(30) + 15,
+					Created: time.Now(),
+				}
+				sources[i].Salary = float64(sources[i].Age) * 100 * float64(toolkit.RandInt(10)/10)
+				if e = k.Set(tableName+":"+sources[i].ID, sources[i], &kiva.WriteOptions{
+					TTL:        10 * time.Second,
+					SyncKind:   kiva.SyncBatch,
+					ExpiryKind: kiva.Iif(i < 10, kiva.ExpiryExtended, kiva.ExpiryAbsolute).(kiva.ExpiryKindEnum),
+				}, false); e != nil {
+					break
+				}
+			}
+			convey.So(e, convey.ShouldBeNil)
+
+			convey.Convey("Check persistent data after 2s: should not have data", func() {
+				time.Sleep(2 * time.Second)
+				persistenceStorage := sourceStorage[tableName]
+				_, hasR5 := persistenceStorage["DB_0005"]
+				_, hasR20 := persistenceStorage["DB_0020"]
+				_, hasR30 := persistenceStorage["DB_0030"]
+				convey.So(hasR5, convey.ShouldBeFalse)
+				convey.So(hasR20, convey.ShouldBeFalse)
+				convey.So(hasR30, convey.ShouldBeFalse)
+
+				convey.Convey("Check persistent data after 6s: should have data already", func() {
+					time.Sleep(4 * time.Second)
+					persistenceStorage = sourceStorage[tableName]
+					hslen := len(persistenceStorage)
+					convey.So(hslen, convey.ShouldEqual, 100)
+					_, hasR5 := persistenceStorage["DB_0005"]
+					_, hasR15 := persistenceStorage["DB_0015"]
+					_, hasR50 := persistenceStorage["DB_0050"]
+					convey.So(hasR5, convey.ShouldBeTrue)
+					convey.So(hasR15, convey.ShouldBeTrue)
+					convey.So(hasR50, convey.ShouldBeTrue)
+
+					convey.Convey("Delete and edit data persistent storage on 8s, should removed from PS but still on HS", func() {
+						time.Sleep(1 * time.Second)
+						persistenceStorage = sourceStorage[tableName]
+
+						oldR5 := persistenceStorage["DB_0005"].(map[string]interface{})
+
+						delete(persistenceStorage, "DB_0005")
+						sourceStorage[tableName] = persistenceStorage
+
+						_, psHasR5 := persistenceStorage["DB_0005"]
+						hsR5 := allTypes{}
+						getR5 := k.Get("dataku:DB_0005", &hsR5)
+						convey.So(psHasR5, convey.ShouldBeFalse)
+						convey.So(getR5, convey.ShouldBeNil)
+						convey.So(oldR5["_id"].(string), convey.ShouldEqual, hsR5.ID)
+
+						convey.Convey("Change and remove data, then check after 12s", func() {
+							persistenceStorage = sourceStorage[tableName]
+							psR3 := persistenceStorage["DB_0003"].(map[string]interface{})
+							psR3["Value"].(map[string]interface{})["Name"] = "Changed"
+							persistenceStorage["DB_0003"] = psR3
+							delete(persistenceStorage, "DB_0004")
+							sourceStorage[tableName] = persistenceStorage
+							time.Sleep(6 * time.Second)
+
+							convey.Convey("initial data should be invalidated except ID less than ID_10", func() {
+								keysR4 := k.Keys("dataku:DB_0004")
+								hsR3 := allTypes{}
+								getHsR3 := k.Get("dataku:DB_0003", &hsR3)
+								convey.So(len(keysR4), convey.ShouldEqual, 0)
+								convey.So(getHsR3, convey.ShouldBeNil)
+								convey.So(hsR3.Name, convey.ShouldEqual, "Changed")
+							})
+						})
+					})
+				})
+			})
+		})
+	})
+}
+
 func prepareKiva() (*kiva.Kiva, error) {
-	/*
-		provider, err := kvredis.New("", logger, nil)
-		if err != nil {
-			return nil, err
-		}
-	*/
 	provider := kvsimple.New(&kiva.WriteOptions{TTL: 30 * time.Minute})
 	kv, err := kiva.New(
 		provider,
@@ -294,7 +377,10 @@ func prepareKiva() (*kiva.Kiva, error) {
 			DefaultWrite: kiva.WriteOptions{
 				TTL: 15 * time.Minute,
 			},
-			SyncBatch: kiva.SyncBatchOptions{},
+			SyncBatch: kiva.SyncBatchOptions{
+				EveryInSecond:       5,
+				SyncTimeoutInSecond: 15 * 60,
+			},
 		})
 	return kv, err
 }
@@ -363,6 +449,9 @@ func myGetter(key1, key2 string, kind kiva.GetKind, dest interface{}) error {
 }
 
 func mySetter(key string, value interface{}, op kiva.CommitKind) error {
+	mtx.Lock()
+	defer mtx.Unlock()
+
 	tableName, keyFind, err := kiva.ParseKey(key)
 	if err != nil {
 		return err
@@ -376,6 +465,7 @@ func mySetter(key string, value interface{}, op kiva.CommitKind) error {
 	case kiva.CommitSave:
 		storage[keyFind] = map[string]interface{}{"_id": keyFind, "Value": value}
 		sourceStorage[tableName] = storage
+		//fmt.Println("setter is called.", key, value.(map[string]interface{})["Name"], "new data length:", len(storage))
 
 	case kiva.CommitDelete:
 		delete(storage, keyFind)

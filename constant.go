@@ -4,18 +4,17 @@ import (
 	"time"
 )
 
-type SyncKind string
+type SyncKindEnum string
 
 const (
-	SyncNow   SyncKind = "NOW"
-	SyncBatch SyncKind = "BATCH"
+	SyncNow   SyncKindEnum = "NOW"
+	SyncBatch SyncKindEnum = "BATCH"
 )
 
 type WriteOptions struct {
-	TTL         time.Duration
-	MaxMemory   int
-	MaxItemSize int
-	SyncKind    SyncKind
+	TTL        time.Duration
+	SyncKind   SyncKindEnum
+	ExpiryKind ExpiryKindEnum
 }
 
 type SyncBatchOptions struct {

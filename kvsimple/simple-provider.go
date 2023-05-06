@@ -3,19 +3,27 @@ package kvsimple
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ariefdarmawan/serde"
 	"github.com/sebarcode/codekit"
 	"github.com/sebarcode/kiva"
 )
 
+type providerItem struct {
+	data interface{}
+	opts *kiva.ItemOptions
+}
+
 type SimpleProvider struct {
 	defaultWriteOptions *kiva.WriteOptions
 	keys                []string
-	data                map[string]*kiva.Item
+	data                map[string]*providerItem
 
 	mtx *sync.RWMutex
 	ctx context.Context
@@ -24,7 +32,7 @@ type SimpleProvider struct {
 func New(opts *kiva.WriteOptions) kiva.Provider {
 	s := new(SimpleProvider)
 	s.defaultWriteOptions = opts
-	s.data = make(map[string]*kiva.Item)
+	s.data = make(map[string]*providerItem)
 
 	s.mtx = new(sync.RWMutex)
 
@@ -64,16 +72,25 @@ func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOpti
 	if codekit.IsPointer(value) {
 		value = reflect.Indirect(reflect.ValueOf(value)).Interface()
 	}
-	item := &kiva.Item{
-		Data: value,
-	}
 	if opts == nil {
 		opts = p.defaultWriteOptions
 	}
-	item.Expiry = time.Now().Add(opts.TTL)
-	p.data[key] = item
+
+	item := providerItem{
+		data: value,
+		opts: &kiva.ItemOptions{
+			Expiry:               time.Now().Add(opts.TTL),
+			SyncDirection:        kiva.SyncToPersistent,
+			ExpiryKind:           opts.ExpiryKind,
+			ExpiryExtendDuration: opts.TTL,
+			SyncKind:             opts.SyncKind,
+		},
+	}
+
+	p.data[key] = &item
 
 	found := false
+	alreadyExist := false
 	strCompare := -2
 	cutOffIndex := -1
 	for index, simpleKey := range p.keys {
@@ -83,8 +100,12 @@ func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOpti
 			found = true
 			break
 		} else if strCompare == 0 {
+			alreadyExist = true
 			break
 		}
+	}
+	if alreadyExist {
+		return nil
 	}
 	if found {
 		var newKeys []string
@@ -102,14 +123,21 @@ func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOpti
 	return nil
 }
 
-func (p *SimpleProvider) Get(key string) *kiva.Item {
+func (p *SimpleProvider) Get(key string, dest interface{}) (*kiva.ItemOptions, error) {
 	v, ok := p.data[key]
-	if ok {
-		return v
+	if !ok {
+		return nil, io.EOF
 	}
-	return &kiva.Item{
-		Error: errors.New("key is not exists"),
+	e := serde.Serde(v.data, dest)
+	if e != nil {
+		return nil, fmt.Errorf("cast: %s", e.Error())
 	}
+	return v.opts, nil
+}
+
+func (p *SimpleProvider) HasKey(key string) bool {
+	_, ok := p.data[key]
+	return ok
 }
 
 func (p *SimpleProvider) Delete(key string) {
@@ -127,7 +155,17 @@ func (p *SimpleProvider) Delete(key string) {
 }
 
 func (p *SimpleProvider) Keys(pattern string) []string {
-	return p.keys
+	keys := []string{}
+	if pattern == "*" {
+		return p.keys
+	}
+	pattern = strings.TrimSuffix(pattern, "*")
+	for _, k := range p.keys {
+		if strings.HasPrefix(k, pattern) {
+			keys = append(keys, k)
+		}
+	}
+	return keys
 }
 
 func (p *SimpleProvider) KeyRanges(from string, to string) []string {
@@ -138,4 +176,29 @@ func (p *SimpleProvider) KeyRanges(from string, to string) []string {
 		}
 	}
 	return inRangeKeys
+}
+
+func (p *SimpleProvider) ChangeSyncOpts(key string, opts *kiva.ItemOptions) error {
+	item, hasItem := p.data[key]
+	if !hasItem {
+		return errors.New("ket not found")
+	}
+
+	item.opts.SyncDirection = opts.SyncDirection
+	item.opts.SyncKind = opts.SyncKind
+	p.data[key] = item
+
+	return nil
+}
+
+func (p *SimpleProvider) RenewExpiry(key string) error {
+	item, hasItem := p.data[key]
+	if !hasItem {
+		return errors.New("ket not found")
+	}
+
+	item.opts.Expiry = time.Now().Add(item.opts.ExpiryExtendDuration)
+	p.data[key] = item
+
+	return nil
 }
