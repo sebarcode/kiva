@@ -1,9 +1,9 @@
 package kiva
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 )
 
@@ -15,38 +15,53 @@ type Kiva struct {
 	commiter CommitFunc
 	getter   GetterFunc
 
-	defaultWriteOptions *WriteOptions
+	opts *KivaOptions
+
+	ctx context.Context
 }
 
-func New(provider Provider, getter GetterFunc, committer CommitFunc, opts *WriteOptions) (*Kiva, error) {
+func New(provider Provider, getter GetterFunc, committer CommitFunc, opts *KivaOptions) (*Kiva, error) {
 	if e := provider.Connect(); e != nil {
 		return nil, errors.New("unable to connect to provider. " + e.Error())
 	}
 
 	k := new(Kiva)
+	k.ctx = context.Background()
 	k.provider = provider
 	k.getter = getter
 	k.commiter = committer
-	k.defaultWriteOptions = opts
+	k.opts = opts
+
+	k.provider.SetContext(k.ctx)
+
+	if k.opts.SyncBatch.EveryInSecond > 0 {
+		go k.Sync()
+	}
 
 	return k, nil
 }
 
 func (k *Kiva) Get(key string, dest interface{}) error {
-	if e := k.provider.Get(key, dest); e != nil {
-		if e != io.EOF {
-			return fmt.Errorf("kv get error. %s", e.Error())
-		}
+	v := k.provider.Get(key)
+	if e := v.Error; e != nil {
 		if k.getter == nil {
-			return fmt.Errorf("kv get error. %s", io.EOF.Error())
+			return fmt.Errorf("kv getter: invalid getter")
 		}
 		if e = k.getter(key, "", GetByID, dest); e != nil {
-			return fmt.Errorf("kv getter error. %s", e.Error())
+			return fmt.Errorf("kv getter: %s", e.Error())
+		}
+		if e != nil {
+			return fmt.Errorf("kv getter: %s", e.Error())
 		}
 
 		destValue := reflect.Indirect(reflect.ValueOf(dest)).Interface()
-		if e = k.provider.Set(key, destValue, k.defaultWriteOptions); e != nil {
-			return fmt.Errorf("kv setter error. %s", e.Error())
+		if e = k.provider.Set(key, destValue, &k.opts.DefaultWrite); e != nil {
+			return fmt.Errorf("kv setter: %s", e.Error())
+		}
+	} else {
+		e = v.StoreTo(dest)
+		if e != nil {
+			return fmt.Errorf("kv getter cast: %s", e.Error())
 		}
 	}
 	return nil
@@ -110,9 +125,13 @@ func (k *Kiva) getByKeys(dest interface{}, keys ...string) error {
 
 	buffers := reflect.MakeSlice(rtSlice, len(keys), len(keys))
 	for i, key := range keys {
+		var elem *Item
+		if elem = k.provider.Get(key); elem.Error != nil {
+			return fmt.Errorf("read data erorr. key %s. %s", key, elem.Error.Error())
+		}
 		newElem := reflect.New(rtElem).Interface()
-		if e := k.provider.Get(key, newElem); e != nil {
-			return fmt.Errorf("read data erorr. key %s. %s", key, e.Error())
+		if e := elem.StoreTo(newElem); e != nil {
+			return fmt.Errorf("read data erorr. cast %s. %s", key, elem.Error.Error())
 		}
 		buffers.Index(i).Set(reflect.ValueOf(newElem).Elem())
 	}
@@ -122,7 +141,7 @@ func (k *Kiva) getByKeys(dest interface{}, keys ...string) error {
 
 func (k *Kiva) Set(key string, value interface{}, opts *WriteOptions, syncToDB bool) error {
 	if opts == nil {
-		opts = k.defaultWriteOptions
+		opts = &k.opts.DefaultWrite
 	}
 	if e := k.provider.Set(key, value, opts); e != nil {
 		return e

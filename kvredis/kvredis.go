@@ -17,10 +17,9 @@ import (
 )
 
 type RedisProvider struct {
-	ctx    context.Context
-	rdb    *redis.Client
-	logger *logger.LogEngine
-	byter  byter.Byter
+	ctx   context.Context
+	rdb   *redis.Client
+	byter byter.Byter
 }
 
 func New(connTxt string, logger *logger.LogEngine, dataByter byter.Byter) (*RedisProvider, error) {
@@ -43,7 +42,6 @@ func New(connTxt string, logger *logger.LogEngine, dataByter byter.Byter) (*Redi
 
 	p.ctx = ctx
 	p.rdb = rdb
-	p.logger = logger
 	if dataByter == nil {
 		p.byter = byter.NewByter("")
 	} else {
@@ -61,7 +59,6 @@ func (p *RedisProvider) Connect() error {
 }
 
 func (p *RedisProvider) Close() {
-	//panic("not implemented") // TODO: Implement
 	p.rdb.Close()
 }
 
@@ -109,22 +106,6 @@ func (p *RedisProvider) Get(key string, dest interface{}) error {
 	if err = serde.Serde(str, dest); err != nil {
 		return err
 	}
-	return nil
-}
-
-func (p *RedisProvider) getByKeys(dest interface{}, keys ...string) error {
-	rtSlice := reflect.TypeOf(dest).Elem()
-	rtElem := rtSlice.Elem()
-
-	buffers := reflect.MakeSlice(rtSlice, len(keys), len(keys))
-	for i, key := range keys {
-		newElem := reflect.New(rtElem).Interface()
-		if e := p.Get(key, newElem); e != nil {
-			return fmt.Errorf("read data erorr. key %s. %s", key, e.Error())
-		}
-		buffers.Index(i).Set(reflect.ValueOf(newElem).Elem())
-	}
-	reflect.ValueOf(dest).Elem().Set(buffers)
 	return nil
 }
 

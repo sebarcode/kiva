@@ -2,7 +2,7 @@ package kvsimple
 
 import (
 	"context"
-	"io"
+	"errors"
 	"reflect"
 	"strings"
 	"sync"
@@ -12,29 +12,20 @@ import (
 	"github.com/sebarcode/kiva"
 )
 
-type simpleProvideItem struct {
-	Data   interface{}
-	Expiry time.Time
-}
-
 type SimpleProvider struct {
 	defaultWriteOptions *kiva.WriteOptions
 	keys                []string
-	data                map[string]simpleProvideItem
+	data                map[string]*kiva.Item
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	mtx    *sync.RWMutex
+	mtx *sync.RWMutex
+	ctx context.Context
 }
 
 func New(opts *kiva.WriteOptions) kiva.Provider {
 	s := new(SimpleProvider)
 	s.defaultWriteOptions = opts
-	s.data = make(map[string]simpleProvideItem)
+	s.data = make(map[string]*kiva.Item)
 
-	ctx, cf := context.WithCancel(context.Background())
-	s.ctx = ctx
-	s.cancel = cf
 	s.mtx = new(sync.RWMutex)
 
 	if opts == nil {
@@ -44,7 +35,6 @@ func New(opts *kiva.WriteOptions) kiva.Provider {
 		opts.TTL = 24 * time.Hour
 	}
 
-	go s.DataCleansing()
 	return s
 }
 
@@ -53,44 +43,18 @@ func (p *SimpleProvider) Connect() error {
 }
 
 func (p *SimpleProvider) Close() {
-	if p.ctx != nil {
-		p.cancel()
-		p.ctx = nil
-	}
 }
 
-func (p *SimpleProvider) DataCleansing() {
-	for {
-		select {
-		case <-time.After(1 * time.Second):
-			p.mtx.Lock()
-			func() {
-				defer p.mtx.Unlock()
-
-				removedKeys := []string{}
-				for k, i := range p.data {
-					if i.Expiry.After(time.Now()) {
-						removedKeys = append(removedKeys, k)
-					}
-				}
-
-				for _, key := range removedKeys {
-					delete(p.data, key)
-				}
-
-				newKeys := []string{}
-				for _, key := range p.keys {
-					if !codekit.HasMember(removedKeys, key) {
-						newKeys = append(newKeys, key)
-					}
-				}
-				p.keys = newKeys
-			}()
-
-		case <-p.ctx.Done():
-			return
-		}
+func (p *SimpleProvider) Context() context.Context {
+	if p.ctx == nil {
+		p.ctx = context.Background()
+		return p.ctx
 	}
+	return p.ctx
+}
+
+func (p *SimpleProvider) SetContext(ctx context.Context) {
+	p.ctx = ctx
 }
 
 func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOptions) error {
@@ -100,7 +64,7 @@ func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOpti
 	if codekit.IsPointer(value) {
 		value = reflect.Indirect(reflect.ValueOf(value)).Interface()
 	}
-	item := simpleProvideItem{
+	item := &kiva.Item{
 		Data: value,
 	}
 	if opts == nil {
@@ -138,17 +102,14 @@ func (p *SimpleProvider) Set(key string, value interface{}, opts *kiva.WriteOpti
 	return nil
 }
 
-func (p *SimpleProvider) Get(key string, dest interface{}) error {
+func (p *SimpleProvider) Get(key string) *kiva.Item {
 	v, ok := p.data[key]
 	if ok {
-		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(v.Data))
-		if p.defaultWriteOptions.TTL != 0 && time.Until(v.Expiry) < 5*time.Second {
-			v.Expiry = time.Now().Add(p.defaultWriteOptions.TTL)
-			p.data[key] = v
-		}
-		return nil
+		return v
 	}
-	return io.EOF
+	return &kiva.Item{
+		Error: errors.New("key is not exists"),
+	}
 }
 
 func (p *SimpleProvider) Delete(key string) {

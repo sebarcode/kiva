@@ -1,14 +1,14 @@
 package kiva_test
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
-	"git.kanosolution.net/kano/appkit"
-	"git.kanosolution.net/kano/dbflex"
-	"github.com/ariefdarmawan/datahub"
-	_ "github.com/ariefdarmawan/flexmgo"
+	"github.com/ariefdarmawan/serde"
 	"github.com/eaciit/toolkit"
 	"github.com/sebarcode/codekit"
 	"github.com/sebarcode/kiva"
@@ -16,20 +16,23 @@ import (
 	"github.com/smartystreets/goconvey/convey"
 )
 
+type storage map[string]interface{}
+
 var (
-	logger    = appkit.LogWithPrefix("kvtest")
-	connTxt   = "mongodb://localhost:27017/testdb"
-	h         = datahub.NewHubWithOpts(datahub.GeneralDbConnBuilder(connTxt), &datahub.HubOptions{UsePool: true, PoolSize: 20})
-	tableName = "TestTable"
+	tableName     = "dataku"
+	sourceStorage = map[string]storage{}
 )
+
+func init() {
+	sourceStorage[tableName] = storage{}
+}
 
 func TestSingle(t *testing.T) {
 	convey.Convey("Preparing", t, func() {
 		kv, err := prepareKiva()
 		convey.So(err, convey.ShouldBeNil)
-
+		sourceStorage[tableName]["Key1"] = map[string]interface{}{"_id": 1, "Value": 100}
 		convey.Convey("classic db data", func() {
-			err := h.SaveAny(tableName, codekit.M{}.Set("_id", "Key1").Set("Value", 100))
 			convey.So(err, convey.ShouldBeNil)
 			convey.Convey("get data", func() {
 				destInt := int(0)
@@ -37,7 +40,7 @@ func TestSingle(t *testing.T) {
 				convey.So(err, convey.ShouldBeNil)
 				convey.So(destInt, convey.ShouldEqual, 100)
 
-				h.SaveAny(tableName, codekit.M{}.Set("_id", "Key1").Set("Value", 150))
+				sourceStorage[tableName]["Key1"] = map[string]interface{}{"_id": 1, "Value": 150}
 				convey.Convey("should read from memory", func() {
 					err = kv.Get(tableName+":Key1", &destInt)
 					convey.So(err, convey.ShouldBeNil)
@@ -178,7 +181,7 @@ func TestSlice(t *testing.T) {
 	})
 }
 
-func TestSyncDB(t *testing.T) {
+func TestSync(t *testing.T) {
 	convey.Convey("set 10 key with syncToDb", t, func() {
 		k, e := prepareKiva()
 		convey.So(e, convey.ShouldBeNil)
@@ -224,8 +227,16 @@ func TestSyncDB(t *testing.T) {
 
 		convey.Convey("validate db", func() {
 			resDatas := []allTypes{}
-			e := h.PopulateByFilter(tableName, dbflex.StartWith("_id", "DB_"), 0, &resDatas)
-			convey.So(e, convey.ShouldBeNil)
+			for _, v := range sourceStorage[tableName] {
+				va, castOK := v.(map[string]interface{})["Value"].(allTypes)
+				if !castOK {
+					continue
+				}
+				id := va.ID
+				if strings.HasPrefix(id, "DB_") {
+					resDatas = append(resDatas, va)
+				}
+			}
 			convey.So(len(resDatas), convey.ShouldEqual, len(sources))
 
 			//random check of 3 elements
@@ -246,18 +257,22 @@ func TestSyncDB(t *testing.T) {
 				convey.So(output.Created.UnixMilli(), convey.ShouldAlmostEqual, source.Created.UnixMilli())
 			}
 
-			convey.Convey("get ranges", func() {
-				k.DeleteByPattern(tableName+":"+"DB_*", false)
-				e = k.GetRange(tableName+":"+"DB_0015", tableName+":"+"DB_0020", &resDatas, true)
-				convey.So(e, convey.ShouldBeNil)
-				convey.So(len(resDatas), convey.ShouldEqual, 6)
-			})
+			convey.Convey("sync get ranges", func() {
+				convey.Convey("delete data on persistent storage", func() {
+					tempStorage := sourceStorage[tableName]
+					for k := range sourceStorage[tableName] {
+						if strings.Compare(k, "DB_0015") >= 0 && strings.Compare(k, "DB_0020") <= 0 {
+							delete(tempStorage, k)
+						}
+					}
+					sourceStorage[tableName] = tempStorage
 
-			convey.Convey("clear db", func() {
-				k.DeleteByPattern(tableName+":"+"DB_*", true)
-				e := h.PopulateByFilter(tableName, dbflex.StartWith("_id", "DB_"), 0, &resDatas)
-				convey.So(e, convey.ShouldBeNil)
-				convey.So(len(resDatas), convey.ShouldEqual, 0)
+					convey.Convey("storage should still have data", func() {
+						e = k.GetRange(tableName+":"+"DB_0015", tableName+":"+"DB_0020", &resDatas, true)
+						convey.So(e, convey.ShouldBeNil)
+						convey.So(len(resDatas), convey.ShouldEqual, 6)
+					})
+				})
 			})
 		})
 	})
@@ -273,10 +288,13 @@ func prepareKiva() (*kiva.Kiva, error) {
 	provider := kvsimple.New(&kiva.WriteOptions{TTL: 30 * time.Minute})
 	kv, err := kiva.New(
 		provider,
-		kiva.BaseGetter(h, "_id"),
-		kiva.BaseCommitter(h, "_id"),
-		&kiva.WriteOptions{
-			TTL: 15 * time.Minute,
+		myGetter,
+		mySetter,
+		&kiva.KivaOptions{
+			DefaultWrite: kiva.WriteOptions{
+				TTL: 15 * time.Minute,
+			},
+			SyncBatch: kiva.SyncBatchOptions{},
 		})
 	return kv, err
 }
@@ -288,4 +306,79 @@ type allTypes struct {
 	Salary  float64
 	Roles   []string
 	Created time.Time
+}
+
+func myGetter(key1, key2 string, kind kiva.GetKind, dest interface{}) error {
+	tableName, keyFind, err := kiva.ParseKey(key1)
+	if err != nil {
+		return err
+	}
+
+	_, keyTo, err := kiva.ParseKey(key2)
+	if kind == kiva.GetRange && err != nil {
+		return err
+	}
+
+	storage, ok := sourceStorage[tableName]
+	if !ok {
+		return errors.New("storage not exists for table " + tableName)
+	}
+
+	var (
+		item interface{}
+	)
+	single := false
+	items := []interface{}{}
+	switch kind {
+	case kiva.GetByID:
+		data, ok := storage[keyFind]
+		if !ok {
+			return io.EOF
+		}
+		single = true
+		item = data
+
+	case kiva.GetByPattern:
+		for k, v := range storage {
+			if strings.HasPrefix(k, keyFind) {
+				items = append(items, v)
+			}
+		}
+
+	case kiva.GetRange:
+		for k, v := range storage {
+			if strings.Compare(k, key1) >= 0 && strings.Compare(k, keyTo) <= 0 {
+				items = append(items, v)
+			}
+		}
+	}
+
+	var e error
+	if single {
+		e = serde.Serde(item.(map[string]interface{})["Value"], dest)
+	} else {
+		e = serde.Serde(items, items)
+	}
+	return e
+}
+
+func mySetter(key string, value interface{}, op kiva.CommitKind) error {
+	tableName, keyFind, err := kiva.ParseKey(key)
+	if err != nil {
+		return err
+	}
+	storage, ok := sourceStorage[tableName]
+	if !ok {
+		return errors.New("storage not exist for " + tableName)
+	}
+
+	switch op {
+	case kiva.CommitSave:
+		storage[keyFind] = map[string]interface{}{"_id": keyFind, "Value": value}
+		sourceStorage[tableName] = storage
+
+	case kiva.CommitDelete:
+		delete(storage, keyFind)
+	}
+	return nil
 }

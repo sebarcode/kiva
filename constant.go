@@ -1,21 +1,31 @@
 package kiva
 
-import "time"
+import (
+	"time"
+)
+
+type SyncKind string
+
+const (
+	SyncNow   SyncKind = "NOW"
+	SyncBatch SyncKind = "BATCH"
+)
 
 type WriteOptions struct {
 	TTL         time.Duration
 	MaxMemory   int
 	MaxItemSize int
+	SyncKind    SyncKind
 }
 
-type Provider interface {
-	Connect() error
-	Close()
-	Set(key string, value interface{}, opts *WriteOptions) error
-	Get(key string, dest interface{}) error
-	Delete(key string)
-	Keys(pattern string) []string
-	KeyRanges(from, to string) []string
+type SyncBatchOptions struct {
+	EveryInSecond       int
+	SyncTimeoutInSecond int
+}
+
+type KivaOptions struct {
+	DefaultWrite WriteOptions
+	SyncBatch    SyncBatchOptions
 }
 
 type GetKind string
