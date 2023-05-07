@@ -36,4 +36,4 @@ To use Kiva we will need 4 things:
 - a ItemReflectorFunction implementation, this function is used on sync process, to define template of new item for each table
 - a Kiva Provider implementation to manage read and write data into hot storage
 
-*NOTE: all data should table should consist of same datatype, if not, panic may happen. Need to work on this to anticipate panic
+*NOTE: all data hosts on atable should consist data with datatype, if not, panic may happen. Need to work on this to anticipate panic
