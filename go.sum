@@ -7,6 +7,8 @@ github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfV
 github.com/sebarcode/codekit v0.1.0/go.mod h1:o54sVKGC7+M1leMkKhVXssOXwuHCylW5GJto0UiQJEg=
 github.com/sebarcode/codekit v0.1.4 h1:k/GS7qjDSbRD1fmo02LgGrD1ab7m21zAs/eqm7tIXfM=
 github.com/sebarcode/codekit v0.1.4/go.mod h1:CNHNFOALfsqgDmu+GIFSo4RAoCsECBCS84RmHbqj88I=
+github.com/sebarcode/logger v0.1.1 h1:qy8Ip5UacaK4LFE0hN/HXUCIu3ZBe4uta8WHQ067jfQ=
+github.com/sebarcode/logger v0.1.1/go.mod h1:dBcREBmgQLUN1kAAs5t9y7dN5RUp+OYEsk4rqUWuM5Q=
 github.com/smartystreets/assertions v1.13.1 h1:Ef7KhSmjZcK6AVf9YbJdvPYG9avaF0ZxudX+ThRdWfU=
 github.com/smartystreets/assertions v1.13.1/go.mod h1:cXr/IwVfSo/RbCSPhoAPv73p3hlSdrBH/b3SdnW/LMY=
 github.com/smartystreets/goconvey v1.8.0 h1:Oi49ha/2MURE0WexF052Z0m+BNSGirfjg5RL+JXWq3w=

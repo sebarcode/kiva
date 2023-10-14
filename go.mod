@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/ariefdarmawan/serde v0.1.1
 	github.com/sebarcode/codekit v0.1.4
+	github.com/sebarcode/logger v0.1.1
 	github.com/smartystreets/goconvey v1.8.0
 )
 
