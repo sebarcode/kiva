@@ -10,14 +10,16 @@ import (
 )
 
 var (
-	kv *kiva.Kv
+	kv      *kiva.Kv
+	mem     kiva.MemoryProvider
+	storage kiva.StorageProvider
 )
 
 func TestMain(m *testing.M) {
-	mem := simplemem.NewMemory()
-	storage := simplestorage.NewStorage()
+	mem = simplemem.NewMemory()
+	storage = simplestorage.NewStorage()
 
-	kv := kiva.New(mem, storage)
+	kv := kiva.New("kivatest", mem, storage)
 	defer kv.Close()
 
 	os.Exit(m.Run())

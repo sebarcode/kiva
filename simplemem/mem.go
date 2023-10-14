@@ -10,11 +10,11 @@ func NewMemory() *memory {
 	return mem
 }
 
-func (mem *memory) Get(id string, dest interface{}) (*kiva.ItemOptions, error) {
+func (mem *memory) Get(table, id string, dest interface{}) (*kiva.ItemOptions, error) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (mem *memory) Set(id string, value interface{}, opts *kiva.ItemOptions) error {
+func (mem *memory) Set(table, id string, value interface{}, opts *kiva.ItemOptions) error {
 	panic("not implemented") // TODO: Implement
 }
 
