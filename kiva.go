@@ -22,17 +22,16 @@ func New(group string, mem MemoryProvider, storage StorageProvider) *Kv {
 
 func (kv *Kv) parseKey(key string) (string, string, error) {
 	keys := strings.Split(key, ":")
+	if len(keys) < 2 {
+		return "", "", errors.New("invalid: key: should be minimal 2 segments")
+	}
 	if len(keys) < 3 {
-		return "", "", errors.New("invalid: key: should be 3 segments")
+		keys = append([]string{kv.group}, keys...)
 	}
 	if keys[0] != kv.group {
 		return "", "", errors.New("invalid: group")
 	}
 	return keys[1], keys[2], nil
-}
-
-func (kv *Kv) makeKeys(table, id string) string {
-	return strings.Join([]string{kv.group, table, id}, ":")
 }
 
 func (kv *Kv) Close() {

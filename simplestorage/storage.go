@@ -34,24 +34,24 @@ func (c *collection) Len() int {
 	return len(c.items.Keys())
 }
 
-type storage struct {
+type Storage struct {
 	collections map[string]*collection
 }
 
-func NewStorage() *storage {
-	s := new(storage)
+func NewStorage() *Storage {
+	s := new(Storage)
 	s.collections = map[string]*collection{}
 	return s
 }
 
-func (s *storage) Connect() error {
+func (s *Storage) Connect() error {
 	return nil
 }
 
-func (s *storage) Close() {
+func (s *Storage) Close() {
 }
 
-func (s *storage) Get(table, id string, dest interface{}) error {
+func (s *Storage) Get(table, id string, dest interface{}) error {
 	c, ok := s.collections[table]
 	if !ok {
 		return io.EOF
@@ -59,7 +59,7 @@ func (s *storage) Get(table, id string, dest interface{}) error {
 	return c.get(id, dest)
 }
 
-func (s *storage) Set(table, id string, value interface{}) error {
+func (s *Storage) Set(table, id string, value interface{}) error {
 	c, ok := s.collections[table]
 	if !ok {
 		c = &collection{
@@ -74,7 +74,7 @@ func (s *storage) Set(table, id string, value interface{}) error {
 	return nil
 }
 
-func (s *storage) Len(table string) int {
+func (s *Storage) Len(table string) int {
 	c, ok := s.collections[table]
 	if !ok {
 		return 0
