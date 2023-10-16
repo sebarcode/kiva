@@ -58,6 +58,14 @@ func (mem *Memory) Set(table, id string, value interface{}, opts *kiva.ItemOptio
 	return nil
 }
 
+func (mem *Memory) Delete(table, id string) error {
+	c := mem.findCreateCollection(table)
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	delete(c.items, id)
+	return nil
+}
+
 func (mem *Memory) Connect() error {
 	return nil
 }

@@ -52,6 +52,12 @@ func TestMemory(t *testing.T) {
 				}
 			}
 			convey.So(errTxt, convey.ShouldBeBlank)
+
+			convey.Convey("delete", func() {
+				err := mem.Delete("basket", fmt.Sprintf("data_%05d", 10))
+				convey.So(err, convey.ShouldBeNil)
+				convey.So(mem.Len("basket"), convey.ShouldEqual, 99)
+			})
 		})
 
 		convey.Convey("get non-existent data", func() {

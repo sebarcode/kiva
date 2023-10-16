@@ -46,7 +46,7 @@ func (kv *Kv) Close() {
 
 func (kv *Kv) Get(id string, dest interface{}) error {
 	if kv.mem == nil {
-		return errors.New("missing: memory storage")
+		return errors.New("missing: memory provider")
 	}
 	table, id, err := kv.parseKey(id)
 	if err != nil {
@@ -74,7 +74,18 @@ func (kv *Kv) Set(id string, value interface{}) error {
 		return err
 	}
 	if kv.mem == nil {
-		return errors.New("missing: memory storage")
+		return errors.New("missing: memory provider")
 	}
 	return kv.mem.Set(table, id, value, nil)
+}
+
+func (kv *Kv) Delete(id string) error {
+	table, id, err := kv.parseKey(id)
+	if err != nil {
+		return err
+	}
+	if kv.mem == nil {
+		return errors.New("missing: memory provider")
+	}
+	return kv.mem.Delete(table, id)
 }

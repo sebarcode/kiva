@@ -73,6 +73,12 @@ func TestKiva(t *testing.T) {
 					e = kv.Get("facts:"+facts[30].ID, resFact)
 					convey.So(e, convey.ShouldBeNil)
 					convey.So(resFact.Sequence, convey.ShouldEqual, facts[30].Sequence)
+
+					convey.Convey("delete", func() {
+						e := kv.Delete("facts:" + facts[30].ID)
+						convey.So(e, convey.ShouldBeNil)
+						convey.So(mem.Len("facts"), convey.ShouldEqual, 1)
+					})
 				})
 			})
 		})
