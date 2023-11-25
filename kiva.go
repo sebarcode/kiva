@@ -20,6 +20,14 @@ func New(group string, mem MemoryProvider, storage StorageProvider) *Kv {
 	return kv
 }
 
+func (kv *Kv) SetCacheOptions(table string, opts CacheOptions) {
+	if kv.mem == nil {
+		return
+	}
+
+	kv.mem.SetCacheOptions(table, opts)
+}
+
 func (kv *Kv) parseKey(key string) (string, string, error) {
 	keys := strings.Split(key, ":")
 	if len(keys) < 2 {
@@ -52,7 +60,7 @@ func (kv *Kv) Get(id string, dest interface{}) error {
 	if err != nil {
 		return err
 	}
-	opts, err := kv.mem.Get(table, id, dest)
+	_, err = kv.mem.Get(table, id, dest)
 	if err != nil {
 		if err != io.EOF {
 			return err
@@ -63,7 +71,7 @@ func (kv *Kv) Get(id string, dest interface{}) error {
 		if err := kv.storage.Get(table, id, dest); err != nil {
 			return err
 		}
-		kv.mem.Set(table, id, dest, opts)
+		kv.mem.Set(table, id, dest)
 	}
 	return nil
 }
@@ -76,7 +84,7 @@ func (kv *Kv) Set(id string, value interface{}) error {
 	if kv.mem == nil {
 		return errors.New("missing: memory provider")
 	}
-	return kv.mem.Set(table, id, value, nil)
+	return kv.mem.Set(table, id, value)
 }
 
 func (kv *Kv) Delete(id string) error {

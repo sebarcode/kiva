@@ -35,7 +35,7 @@ func TestMemory(t *testing.T) {
 			baskets[i] = codekit.RandInt(100000)
 		}
 		for index, basket := range baskets {
-			mem.Set("basket", fmt.Sprintf("data_%05d", index), basket, nil)
+			mem.Set("basket", fmt.Sprintf("data_%05d", index), basket)
 		}
 		convey.So(mem.Len("basket"), convey.ShouldEqual, dataCount)
 		convey.Convey("validate", func() {

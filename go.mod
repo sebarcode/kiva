@@ -1,6 +1,6 @@
 module github.com/sebarcode/kiva
 
-go 1.18
+go 1.20
 
 require (
 	github.com/ariefdarmawan/serde v0.1.1

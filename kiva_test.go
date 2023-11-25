@@ -38,46 +38,64 @@ func TestKiva(t *testing.T) {
 			resFact := new(TestModel)
 			e := kv.Get("facts:"+facts[10].ID, resFact)
 			convey.So(e, convey.ShouldEqual, io.EOF)
-		})
 
-		convey.Convey("inject data into storage", func() {
-			convey.Convey("validate data entered", func() {
-				for _, fact := range facts[:20] {
-					storage.Set("facts", fact.ID, fact)
-				}
-				convey.So(storage.Len("facts"), convey.ShouldEqual, 20)
+			convey.Convey("inject data into storage", func() {
+				convey.Convey("validate data entered", func() {
+					for _, fact := range facts[:20] {
+						if e := storage.Set("facts", fact.ID, fact); e != nil {
+							convey.Println("error set memory", e.Error())
+						}
+					}
+					convey.So(storage.Len("facts"), convey.ShouldEqual, 20)
 
-				resFact := new(TestModel)
-				e := kv.Get("facts:"+facts[10].ID, resFact)
-				convey.So(e, convey.ShouldBeNil)
-				convey.So(resFact.Sub.Config["random"], convey.ShouldEqual, facts[10].Sub.Config["random"])
-			})
-
-			convey.Convey("update using set", func() {
-				resFact := new(TestModel)
-				e := kv.Set("facts:"+facts[30].ID, facts[30])
-				convey.So(e, convey.ShouldBeNil)
-				convey.So(mem.Len("facts"), convey.ShouldEqual, 2)
-
-				e = kv.Get("facts:"+facts[30].ID, resFact)
-				convey.So(e, convey.ShouldBeNil)
-				convey.So(resFact.Sub.Config["random"], convey.ShouldEqual, facts[30].Sub.Config["random"])
-
-				convey.Convey("re-update using set", func() {
 					resFact := new(TestModel)
-					facts[30].Sequence = 999
-					e := kv.Set("facts:"+facts[30].ID, facts[30])
+					e := kv.Get("facts:"+facts[10].ID, resFact)
 					convey.So(e, convey.ShouldBeNil)
-					convey.So(mem.Len("facts"), convey.ShouldEqual, 2)
+					convey.So(resFact.Sub.Config["random"], convey.ShouldEqual, facts[10].Sub.Config["random"])
 
-					e = kv.Get("facts:"+facts[30].ID, resFact)
-					convey.So(e, convey.ShouldBeNil)
-					convey.So(resFact.Sequence, convey.ShouldEqual, facts[30].Sequence)
-
-					convey.Convey("delete", func() {
-						e := kv.Delete("facts:" + facts[30].ID)
+					convey.Convey("update using set", func() {
+						resFact := new(TestModel)
+						e := kv.Set("facts:"+facts[30].ID, facts[30])
 						convey.So(e, convey.ShouldBeNil)
-						convey.So(mem.Len("facts"), convey.ShouldEqual, 1)
+						convey.So(mem.Len("facts"), convey.ShouldEqual, 2)
+
+						e = kv.Get("facts:"+facts[30].ID, resFact)
+						convey.So(e, convey.ShouldBeNil)
+						convey.So(resFact.Sub.Config["random"], convey.ShouldEqual, facts[30].Sub.Config["random"])
+
+						convey.Convey("re-update using set", func() {
+							resFact := new(TestModel)
+							facts[30].Sequence = 999
+							e := kv.Set("facts:"+facts[30].ID, facts[30])
+							convey.So(e, convey.ShouldBeNil)
+							convey.So(mem.Len("facts"), convey.ShouldEqual, 2)
+
+							e = kv.Get("facts:"+facts[30].ID, resFact)
+							convey.So(e, convey.ShouldBeNil)
+							convey.So(resFact.Sequence, convey.ShouldEqual, facts[30].Sequence)
+
+							convey.Convey("delete", func() {
+								e := kv.Delete("facts:" + facts[30].ID)
+								convey.So(e, convey.ShouldBeNil)
+								convey.So(mem.Len("facts"), convey.ShouldEqual, 1)
+								convey.So(len(mem.Keys("facts")), convey.ShouldEqual, 1)
+
+								convey.Convey("cache options", func() {
+									kv.SetCacheOptions("facts", kiva.CacheOptions{
+										Size:         10,
+										SyncEvery:    1 * time.Second,
+										ExpiryBy:     kiva.ExpiryByCreated,
+										ExpiryPeriod: 5 * time.Second,
+									})
+
+									time.Sleep(2 * time.Second)
+									convey.So(mem.Len("facts"), convey.ShouldEqual, 1)
+
+									time.Sleep(5 * time.Second)
+									convey.So(mem.Len("facts"), convey.ShouldEqual, 0)
+								})
+							})
+						})
 					})
 				})
 			})
