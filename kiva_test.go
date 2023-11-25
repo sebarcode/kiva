@@ -85,13 +85,13 @@ func TestKiva(t *testing.T) {
 										Size:         10,
 										SyncEvery:    1 * time.Second,
 										ExpiryBy:     kiva.ExpiryByCreated,
-										ExpiryPeriod: 5 * time.Second,
+										ExpiryPeriod: 3 * time.Second,
 									})
 
 									time.Sleep(2 * time.Second)
 									convey.So(mem.Len("facts"), convey.ShouldEqual, 1)
 
-									time.Sleep(5 * time.Second)
+									time.Sleep(2 * time.Second)
 									convey.So(mem.Len("facts"), convey.ShouldEqual, 0)
 								})
 							})
